@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiet TV · превью интерфейса</title>
+<style>
+:root{color-scheme:dark;font:15px system-ui,sans-serif;color:#f2f5ff;background:#080c15}
+*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button{cursor:pointer;color:inherit;border:0}button:focus-visible,input:focus-visible{outline:2px solid #edf3ff;outline-offset:3px}button{transition:background .18s,transform .22s}button:hover{filter:brightness(1.13)}[hidden]{display:none!important}
+.toolbar{min-height:66px;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:1px solid #ffffff12}.toolbar strong{font-weight:500}.toolbar small,.help{color:#acb9ce}.toolbar button{background:#26354a;padding:8px 14px;border-radius:24px}.toolbar span{display:flex;gap:10px;align-items:center}.viewport{padding:24px;display:grid;place-items:center;overflow:hidden}.screen-frame{position:relative;width:100%;max-width:1440px;aspect-ratio:16/9;overflow:hidden;background:#080c15;box-shadow:0 24px 90px #0006;border-radius:12px}.screen{width:960px;height:540px;transform-origin:top left;position:absolute;overflow:hidden;background:radial-gradient(ellipse at 84% 35%,var(--ambient,#263747),#080c15 78%);transition:background .42s}
+.scenery{position:absolute;inset:0;pointer-events:none;opacity:.22;background:radial-gradient(ellipse at 80% 25%,var(--glow,#507cac),transparent 45%),linear-gradient(115deg,#080c15 20%,transparent 100%);transition:background .42s}.scenery::after{content:'';position:absolute;width:460px;height:460px;right:-60px;top:140px;border-radius:50%;background:linear-gradient(140deg,#fff2,transparent 60%);transform:rotate(-20deg)}
+.shell{position:relative;padding:20px 48px 14px;height:100%}.header{height:40px;display:flex;align-items:center;gap:16px}.brand{font-size:24px;letter-spacing:.06em;flex:1;font-weight:500}.header button{height:38px;min-width:42px;border-radius:12px;background:#1f27366e;padding:6px 12px}.header .menu{font-size:22px}.clock{font-size:20px;color:#acb9ce;margin-left:8px}.section{padding:16px 0 4px 10px}.section-name{font-size:16px}.section small{font-size:11px;color:#8b92a5;display:block;margin-top:3px}.content{height:391px;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}.rail{height:148px;padding:8px 18px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-behavior:smooth}.rail-row{display:flex;width:max-content}.slot{width:118px;height:132px;flex:none;display:grid;place-items:center}.tile{width:88px;height:88px;border-radius:12px;padding:10px;background:#1f27366e;position:relative;transition:transform .22s ease-out,background .22s;outline:none!important}.tile.is-selected{transform:scale(1.18);background:#3a4152;box-shadow:inset 0 0 0 2px #ebf2ff}.app-icon{width:100%;height:100%;display:grid;place-items:center;border-radius:10px;background:var(--icon);font-weight:700;letter-spacing:-.04em;font-size:27px;color:#fff;overflow:hidden}.tile:focus-visible{box-shadow:inset 0 0 0 2px #fff,0 0 20px #ffffff20}
+.hero{min-height:270px;display:flex;align-items:center;padding:12px 12px 12px 18px;gap:24px}.description{flex:1;min-width:0}.eyebrow{font-size:10px;letter-spacing:.16em;color:#ebf2ff}.hero h1{font-weight:300;font-size:42px;line-height:1.15;margin:12px 0 16px;overflow-wrap:anywhere}.subtitle{font-size:13px;color:#8b92a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.actions{display:flex;gap:12px;margin-top:20px;padding:3px}.actions button{height:42px;border-radius:24px;background:#28344896}.actions .primary{width:150px;background:#edf3ff;color:#080c15}.actions .remove{width:46px;font-size:24px}.hero-art{width:345px;height:210px;flex:none;display:grid;place-items:center;opacity:.85}.hero-art .app-icon{width:144px;height:144px;font-size:54px;border-radius:24px;box-shadow:0 20px 80px #0004}.hero.changing{animation:reveal .28s ease-out}@keyframes reveal{from{opacity:.2;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}.footer{position:absolute;bottom:14px;left:48px;font-size:12px;color:#8b92a5}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:20px}.catalogue-tile{padding:16px;border-radius:12px;background:#1f273690;min-height:132px;display:grid;justify-items:center;gap:12px}.catalogue-tile .app-icon{width:62px;height:62px;font-size:23px}.empty{padding:48px 20px;color:#acb9ce;line-height:1.7}
+.veil{position:absolute;inset:0;background:#0004;z-index:3}.drawer{position:absolute;inset:0 auto 0 0;width:270px;background:#0f1623cd;border:1px solid #ffffff14;border-radius:12px;padding:20px 24px 16px;display:flex;flex-direction:column;animation:slide .24s ease-out;box-shadow:15px 0 60px #0002}.drawer h2{font-size:24px;font-weight:500;margin:0}.drawer small{color:#8b92a5;display:block;margin:6px 0 20px}.drawer button{height:50px;border-radius:12px;text-align:left;background:transparent;font-size:20px;padding:0 18px;margin-bottom:8px}.drawer button:hover,.drawer button:focus-visible{background:#bed2f064;transform:translateX(6px)}.drawer .music{color:#64dd91}.drawer .bottom{margin-top:auto}.drawer .all{width:46px;height:42px;display:grid;place-items:center;padding:10px;background:#1f27366e;margin-bottom:14px}.drawer .hint{font-size:12px;color:#8b92a5}@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+.modal-veil{position:absolute;inset:0;z-index:5;background:#0008;display:grid;place-items:center}.modal{width:600px;max-height:450px;overflow:auto;background:#101a2af5;border:1px solid #445a7394;border-radius:20px;padding:24px}.modal h2{font-size:24px;font-weight:400;margin:0 0 18px}.modal p{color:#acb9ce;line-height:1.7}.modal button{background:#384b6660;border-radius:24px;padding:10px 20px;margin:6px 6px 0 0}.modal input{width:100%;padding:12px;border:1px solid #5a7394;background:#080c15;border-radius:12px;color:#fff;margin-bottom:12px}.results{display:grid;gap:8px}.results button{text-align:left;border-radius:12px}.result-row{display:flex;align-items:center;gap:12px}.result-row .app-icon{width:32px;height:32px;font-size:15px}.result-row span:nth-child(2){flex:1}.result-row small{color:#acb9ce}.help{padding:0 24px 24px;max-width:1490px;margin:auto;display:flex;justify-content:space-between;gap:20px;font-size:13px;line-height:1.6}.toast{position:absolute;left:50%;bottom:38px;transform:translateX(-50%);background:#edf3ff;color:#080c15;padding:12px 20px;border-radius:24px;z-index:8;font-size:13px;max-width:80%;text-align:center}.icon{width:22px;height:22px;display:inline-block;vertical-align:middle}.small-note{font-size:12px;color:#acb9ce}
+@media(max-width:650px){.toolbar{padding:12px}.viewport{padding:12px}.help{flex-direction:column;padding:0 12px 16px;gap:8px}.toolbar small{display:block}.screen-frame{border-radius:5px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header class="toolbar"><div><strong>Quiet TV <small>0.5.1-dev · интерактивное превью</small></strong></div><span><button id="reset">Сбросить демо</button><button id="fullscreen">На весь экран</button></span></header>
+<main class="viewport"><div class="screen-frame"><section class="screen" aria-label="Демонстрационный главный экран Quiet TV" style="--ambient:#263747"><div class="scenery"></div><div class="shell">
+<header class="header"><button class="menu" aria-label="Открыть навигацию">☰</button><div class="brand">Медиа</div><button id="vpn">VPN</button><button id="settings" aria-label="Настройки">⚙</button><time class="clock">20:45</time></header>
+<div class="section"><div class="section-name">Главная</div><small class="section-hint">Ваши приложения. Ничего лишнего.</small></div>
+<div class="content"><div class="rail"><div class="rail-row"></div></div><div class="hero"><div class="description"><div class="eyebrow">QUIET TV / ВАШЕ ПРОСТРАНСТВО</div><h1></h1><div class="subtitle"></div><div class="actions"><button class="primary" id="launch">Открыть</button><button class="remove" id="remove" aria-label="Убрать выбранное приложение с главной">⊖</button></div></div><div class="hero-art" aria-hidden="true"></div></div><div class="grid" hidden></div><div class="empty" hidden>Главная пока пуста.<br>Откройте каталог ▦ в боковой панели и закрепите приложения.</div></div>
+<div class="footer">Удерживайте OK на приложении, чтобы закрепить его на главной</div></div>
+<div class="veil" hidden><nav class="drawer" aria-label="Навигация"><h2>quiet tv</h2><small>Ваше пространство</small><button data-nav="search">⌕　Поиск</button><button data-nav="home">⌂　Главная</button><button class="music" data-nav="music">♫　Spotify</button><div class="bottom"><button class="all" data-nav="all" aria-label="Все приложения"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg></button><div class="hint">Назад или → — закрыть</div></div></nav></div>
+<div class="modal-veil" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></section></div><div class="toast" hidden role="status"></div></section></div></main>
+<footer class="help"><span>← → выбор · ↓ действия · Enter открыть · Esc назад · M меню<br>Мышь: наведение — выбор, правый клик — действия приложения.</span><span>Демонстрационные приложения. Это браузерная модель интерфейса.<br>Запуск Android-приложений и работа пульта здесь не эмулируются.</span></footer>
+<script>
+(() => {
+'use strict';
+const apps=[
+ {id:'youtube',name:'YouTube',mark:'▶',color:'#e12732',ambient:'#4e202a'},
+ {id:'kinopoisk',name:'Кинопоиск',mark:'К',color:'#ef7024',ambient:'#493025'},
+ {id:'spotify',name:'Spotify',mark:'≋',color:'#168343',ambient:'#173c32'},
+ {id:'netflix',name:'Netflix',mark:'N',color:'#a81023',ambient:'#421829'},
+ {id:'vlc',name:'VLC',mark:'△',color:'#c56e20',ambient:'#443b26'},
+ {id:'okko',name:'Okko',mark:'okko',color:'#5b2da4',ambient:'#32234b'},
+ {id:'wink',name:'Wink',mark:'W',color:'#ab393b',ambient:'#432934'},
+ {id:'kodi',name:'Kodi',mark:'◇',color:'#2085a8',ambient:'#1b394d'},
+ {id:'rutube',name:'RUTUBE',mark:'R',color:'#193d6e',ambient:'#1c304e'},
+ {id:'settings',name:'Настройки ТВ',mark:'⚙',color:'#43516d',ambient:'#283445'}
+];
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+let home=apps.slice(0,8).map(a=>a.id), selected=home[0], mode='home', priorFocus=null, toastTimer;
+try{const saved=JSON.parse(localStorage.getItem('quiet-tv-preview-home'));if(Array.isArray(saved))home=saved.filter(id=>apps.some(a=>a.id===id));}catch(_){}
+selected=home[0]||apps[0].id;
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const icon=a=>{const el=document.createElement('span');el.className='app-icon';el.style.setProperty('--icon',a.color);el.textContent=a.mark;el.setAttribute('aria-hidden','true');return el;};
+function save(){try{localStorage.setItem('quiet-tv-preview-home',JSON.stringify(home));}catch(_){}}
+function toast(message){clearTimeout(toastTimer);$('.toast').textContent=message;$('.toast').hidden=false;toastTimer=setTimeout(()=>$('.toast').hidden=true,2600);}
+function visible(){return mode==='home'?home.map(id=>apps.find(a=>a.id===id)):apps;}
+function select(id,focus=false){
+ const app=apps.find(a=>a.id===id);if(!app)return;const changed=selected!==id;selected=id;
+ $$('.tile').forEach(b=>{const active=b.dataset.id===id;b.classList.toggle('is-selected',active);b.setAttribute('aria-pressed',String(active));b.tabIndex=active?0:-1;});
+ $('.hero h1').textContent=app.name;$('.subtitle').textContent='Медиа и развлечения / '+app.name;
+ $('.hero-art').replaceChildren(icon(app));$('.screen').style.setProperty('--ambient',app.ambient);$('.screen').style.setProperty('--glow',app.color);
+ if(changed){$('.hero').classList.remove('changing');void $('.hero').offsetWidth;$('.hero').classList.add('changing');}
+ const tile=$$('.tile').find(b=>b.dataset.id===id);if(tile){if(focus)tile.focus({preventScroll:true});$('.rail').scrollTo({left:Math.max(0,tile.parentElement.offsetLeft-$('.rail-row').offsetLeft),behavior:reduced?'instant':'smooth'});}
+}
+function render(){
+ const list=visible(), isHome=mode==='home';$('.section-name').textContent=isHome?'Главная':'Все приложения';$('.section-hint').textContent=isHome?'Ваши приложения. Ничего лишнего.':'Правый клик на приложении — закрепить на главной';
+ $('.rail').hidden=!isHome||!list.length;$('.hero').hidden=!isHome||!list.length;$('.grid').hidden=isHome;$('.empty').hidden=!isHome||!!list.length;$('.rail-row').replaceChildren();$('.grid').replaceChildren();
+ list.forEach(app=>{
+  const b=document.createElement('button');b.dataset.id=app.id;b.setAttribute('aria-label',app.name);b.append(icon(app));
+  b.addEventListener('contextmenu',event=>{event.preventDefault();appActions(app);});
+  if(isHome){b.className='tile';b.addEventListener('focus',()=>select(app.id));b.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse')select(app.id);});b.addEventListener('click',()=>{select(app.id);launch();});const slot=document.createElement('div');slot.className='slot';slot.append(b);$('.rail-row').append(slot);}
+  else{b.className='catalogue-tile';const label=document.createElement('span');label.textContent=app.name;b.append(label);b.addEventListener('click',()=>appActions(app));$('.grid').append(b);}
+ });
+ if(list.length){if(!list.some(a=>a.id===selected))selected=list[0].id;select(selected);}else $('.screen').style.setProperty('--ambient','#263747');
+ $('.content').scrollTop=0;
+}
+function focusTile(){const tile=$$('.tile').find(b=>b.dataset.id===selected);if(tile)tile.focus({preventScroll:true});else $('.menu').focus();}
+function drawer(open){if(open){priorFocus=document.activeElement;$('.veil').hidden=false;$('[data-nav="search"]').focus();}else{$('.veil').hidden=true;if(priorFocus?.isConnected)priorFocus.focus({preventScroll:true});else focusTile();}}
+function modal(title){priorFocus=document.activeElement;const box=$('.modal');box.replaceChildren();const h=document.createElement('h2');h.id='modal-title';h.textContent=title;box.append(h);$('.modal-veil').hidden=false;return box;}
+function closeModal(){ $('.modal-veil').hidden=true;if(priorFocus?.isConnected)priorFocus.focus({preventScroll:true});else focusTile();}
+function modalButton(box,label,action){const b=document.createElement('button');b.textContent=label;b.onclick=action;box.append(b);return b;}
+function explain(title,message){const box=modal(title),p=document.createElement('p');p.textContent=message;box.append(p);modalButton(box,'Закрыть',closeModal).focus();}
+function launch(){const app=apps.find(a=>a.id===selected);explain(app.name,'В приложении на телевизоре эта кнопка запускает '+app.name+'. В превью внешние приложения не запускаются.');}
+function remove(id=selected){const at=home.indexOf(id);home=home.filter(key=>key!==id);save();selected=home[Math.min(Math.max(0,at),home.length-1)]||apps[0].id;render();focusTile();toast('Убрано с главной. Приложение осталось в каталоге.');}
+function appActions(app){const box=modal(app.name);modalButton(box,home.includes(app.id)?'Убрать с главной':'Закрепить на главной',()=>{closeModal();if(home.includes(app.id))remove(app.id);else{home.push(app.id);save();render();toast('Закреплено на главной');}}).focus();modalButton(box,'Открыть',()=>{closeModal();selected=app.id;launch();});modalButton(box,'Закрыть',closeModal);}
+function search(){const box=modal('Поиск приложений'),input=document.createElement('input');input.placeholder='Название приложения';input.setAttribute('aria-label','Название приложения');const results=document.createElement('div');results.className='results';box.append(input,results);function update(){results.replaceChildren();const query=input.value.toLocaleLowerCase('ru').replaceAll('ё','е');apps.filter(a=>a.name.toLocaleLowerCase('ru').replaceAll('ё','е').includes(query)).forEach(a=>{const b=document.createElement('button');b.className='result-row';b.append(icon(a));const text=document.createElement('span');text.textContent=a.name;b.append(text);const state=document.createElement('small');state.textContent=home.includes(a.id)?'На главной':'В каталоге';b.append(state);b.onclick=()=>{closeModal();appActions(a);};results.append(b);});if(!results.children.length)results.textContent='Ничего не найдено';}input.oninput=update;update();modalButton(box,'Закрыть',closeModal);input.focus();}
+$('.menu').onclick=()=>drawer(true);$('.veil').onclick=e=>{if(e.target===$('.veil'))drawer(false);};
+$$('[data-nav]').forEach(b=>b.onclick=()=>{const nav=b.dataset.nav;drawer(false);if(nav==='home'||nav==='all'){mode=nav==='home'?'home':'all';render();if(mode==='home')focusTile();else $('.catalogue-tile')?.focus();}else if(nav==='search')search();else explain('Spotify','На телевизоре эта кнопка открывает установленный Spotify.');});
+$('#launch').onclick=launch;$('#remove').onclick=()=>remove();$('#vpn').onclick=()=>explain('VPN','В Quiet TV здесь открывается выбранный VPN-клиент. Превью не управляет сетевыми подключениями.');$('#settings').onclick=()=>explain('Настройки','Диалоги и кнопки Quiet TV оформлены в общей теме. Системные настройки Android и кнопки прошивки остаются штатными.');
+$('#reset').onclick=()=>{home=apps.slice(0,8).map(a=>a.id);selected=home[0];mode='home';save();$('.modal-veil').hidden=true;$('.veil').hidden=true;render();toast('Демонстрационный список восстановлен');};
+$('#fullscreen').onclick=()=>{if(!document.fullscreenElement)$('.screen-frame').requestFullscreen?.().catch(()=>toast('Полноэкранный режим недоступен'));else document.exitFullscreen?.();};
+function resize(){const scale=$('.screen-frame').clientWidth/960;$('.screen').style.transform='scale('+scale+')';}new ResizeObserver(resize).observe($('.screen-frame'));resize();
+function clock(){const now=new Date();$('.clock').textContent=now.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,30000);
+document.addEventListener('keydown',event=>{
+ const key=event.key, modalOpen=!$('.modal-veil').hidden, drawerOpen=!$('.veil').hidden;
+ if(modalOpen){if(key==='Escape'){event.preventDefault();closeModal();}else if(key==='Tab'){const items=[...$('.modal').querySelectorAll('button,input')];const index=items.indexOf(document.activeElement);if(items.length){event.preventDefault();items[(index+(event.shiftKey?-1:1)+items.length)%items.length].focus();}}return;}
+ if(key==='Escape'){event.preventDefault();if(drawerOpen)drawer(false);else if(mode!=='home'){mode='home';render();focusTile();}return;}
+ if(key.toLowerCase()==='m'){event.preventDefault();drawer(!drawerOpen);return;}
+ if(drawerOpen){if(key==='ArrowRight'){event.preventDefault();drawer(false);}else if(key==='ArrowDown'||key==='ArrowUp'||key==='Tab'){event.preventDefault();const items=$$('.drawer button'),index=items.indexOf(document.activeElement),step=(key==='ArrowUp'||event.shiftKey)?-1:1;items[(index+step+items.length)%items.length].focus();}return;}
+ if(mode!=='home')return;const target=document.activeElement;
+ if(['ArrowLeft','ArrowRight'].includes(key)&&target.closest('.actions')){event.preventDefault();(target===$('#launch')?$('#remove'):$('#launch')).focus();return;}
+ if(key==='ArrowUp'&&target.closest('.actions')){event.preventDefault();focusTile();return;}
+ if(['ArrowLeft','ArrowRight'].includes(key)&&home.length&&!target.closest('.header')&&!target.closest('.toolbar')){event.preventDefault();const i=home.indexOf(selected);if(key==='ArrowLeft'&&i===0){drawer(true);return;}select(home[Math.max(0,Math.min(home.length-1,i+(key==='ArrowRight'?1:-1)))],true);}
+ if(key==='ArrowDown'&&target.classList.contains('tile')){event.preventDefault();$('#launch').focus();}
+ if((key==='Enter'||key===' ')&&target===document.body&&home.length){event.preventDefault();launch();}
+});
+render();
+})();
+</script>
+</body>
+</html>

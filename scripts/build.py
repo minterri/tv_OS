@@ -57,7 +57,7 @@ def main():
         run(jtool("keytool"), "-genkeypair", "-keystore", key, "-storepass", "quiettv-local",
             "-keypass", "quiettv-local", "-alias", "quiettv", "-keyalg", "RSA",
             "-keysize", "2048", "-validity", "10000", "-dname", "CN=Quiet TV Personal")
-    output = ROOT / "QuietTV-0.5.0-dev.apk"
+    output = ROOT / "QuietTV-0.5.1-dev.apk"
     run(jtool("java"), "-jar", bt / "lib" / "apksigner.jar", "sign",
         "--ks", key, "--ks-key-alias", "quiettv", "--ks-pass", "pass:quiettv-local",
         "--key-pass", "pass:quiettv-local", "--out", output, build / "aligned.apk")
