@@ -29,10 +29,8 @@ import java.util.concurrent.*;
 
 /** Offline TV launcher. No analytics, network clients, services or package mutations. */
 public class MainActivity extends Activity {
-    private static final int BG = Color.rgb(18, 18, 18);
-    private static final int PANEL = Color.argb(170, 40, 43, 40);
-    private static final int ACCENT = Color.rgb(119, 204, 150);
-    private static final int MUTED = Color.rgb(168, 176, 170);
+    private int BG, PANEL, ACCENT, MUTED, FG;
+    private HomeTheme homeTheme;
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ArrayList<App> apps = new ArrayList<>();
@@ -60,8 +58,15 @@ public class MainActivity extends Activity {
     private LinearLayout heroDescription;
     private int backgroundColor = Color.rgb(30, 44, 35);
     private ImageView previewImage;
-    private ImageView ambientImage;
-    private Button launchButton, removeButton;
+    private Button launchButton;
+    private ImageButton removeButton;
+    private boolean resumed;
+    private final Runnable driftFrame = new Runnable() {
+        @Override public void run() {
+            if (!resumed || !ValueAnimator.areAnimatorsEnabled()) return;
+            updateBackdrop(); handler.postDelayed(this, 80);
+        }
+    };
     private App selectedApp;
     private View selectedTile;
     private TextView previewTitle, previewSubtitle;
@@ -79,16 +84,19 @@ public class MainActivity extends Activity {
     }
 
     @Override public void onCreate(Bundle state) {
-        setTheme(R.style.QuietTheme);
-        super.onCreate(state);
         prefs = getSharedPreferences("quiet-tv", MODE_PRIVATE);
+        homeTheme = HomeTheme.get(prefs.getInt("home-theme", 0));
+        BG=homeTheme.background; PANEL=homeTheme.surface; ACCENT=homeTheme.accent;
+        MUTED=homeTheme.muted; FG=homeTheme.foreground; backgroundColor=ACCENT;
+        setTheme(homeTheme.style);
+        super.onCreate(state);
         navigationSound = new NavigationSound(this, prefs);
         IntentFilter changes = new IntentFilter();
         changes.addAction(Intent.ACTION_PACKAGE_ADDED); changes.addAction(Intent.ACTION_PACKAGE_REMOVED);
         changes.addAction(Intent.ACTION_PACKAGE_CHANGED); changes.addDataScheme("package");
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(packageChanges, changes, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(packageChanges, changes);
-        if (state != null) favoritesOnly = state.getBoolean("favorites", true);
+        if (state != null) { favoritesOnly = state.getBoolean("favorites", true); lastFocus = state.getString("last-focus", ""); }
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
@@ -97,6 +105,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        resumed = true; handler.removeCallbacks(driftFrame); handler.post(driftFrame);
         lastNavigationAt = 0;
         if (appsDirty) reloadApps();
         else if (selectedApp != null) { previewKey = ""; showPreview(selectedApp); }
@@ -104,6 +113,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onPause() {
         super.onPause();
+        resumed = false; handler.removeCallbacks(driftFrame);
         if (colorAnimation != null) colorAnimation.cancel();
         if (carouselAnimation != null) carouselAnimation.cancel();
         cancelPreview();
@@ -125,10 +135,30 @@ public class MainActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle out) {
         out.putBoolean("favorites", favoritesOnly);
+        out.putString("last-focus", selectedApp != null ? selectedApp.key : lastFocus);
         super.onSaveInstanceState(out);
     }
 
     private int dp(float n) { return Math.round(n * getResources().getDisplayMetrics().density); }
+    private void updateBackdrop() {
+        if (backdrop == null) return;
+        float phase = ValueAnimator.areAnimatorsEnabled() ? (float)(0.5 + 0.5*Math.sin(SystemClock.uptimeMillis()/7000.0)) : 0.5f;
+        float tint = homeTheme.light ? 0.12f : 0.28f;
+        backdrop.setColors(new int[]{
+            HomeTheme.mix(BG, backgroundColor, tint + phase*0.08f),
+            HomeTheme.mix(BG, ACCENT, homeTheme.light ? 0.04f : 0.07f),
+            HomeTheme.mix(BG, backgroundColor, tint + (1-phase)*0.08f)});
+    }
+    private ImageButton iconButton(int resource, String tag, String description, Runnable action) {
+        ImageButton button = new ImageButton(this);
+        Drawable icon = artwork(getDrawable(resource)); icon.setTint(FG);
+        button.setImageDrawable(icon); button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        button.setPadding(dp(11),dp(8),dp(11),dp(8));
+        button.setContentDescription(description); button.setTag(tag);
+        button.setStateListAnimator(null); focusStyle(button);
+        button.setOnClickListener(v -> action.run());
+        return button;
+    }
     private Drawable artwork(Drawable source) {
         if (source == null) return null;
         Drawable.ConstantState state = source.getConstantState();
@@ -162,7 +192,7 @@ public class MainActivity extends Activity {
     }
     private GradientDrawable shape(int color, boolean focused) {
         GradientDrawable d = new GradientDrawable();
-        d.setColor(color); d.setCornerRadius(dp(12));
+        d.setColor(color); d.setCornerRadius(dp(homeTheme.radius));
         d.setStroke(dp(focused ? 2 : 0), focused ? ACCENT : Color.TRANSPARENT);
         return d;
     }
@@ -171,7 +201,7 @@ public class MainActivity extends Activity {
         v.setSoundEffectsEnabled(false);
         v.setBackground(shape(PANEL, false));
         v.setOnFocusChangeListener((view, focused) -> {
-            view.setBackground(shape(focused ? Color.rgb(48, 60, 51) : PANEL, focused));
+            view.setBackground(shape(focused ? HomeTheme.mix(PANEL, ACCENT, 0.22f) : PANEL, focused));
             view.animate().cancel();
             view.animate().scaleX(1f).scaleY(1f)
                 .setDuration(180).setInterpolator(new DecelerateInterpolator()).start();
@@ -182,17 +212,17 @@ public class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(title); b.setTextSize(13); b.setAllCaps(false);
         b.setStateListAnimator(null); b.setElevation(0);
-        b.setTextColor(Color.WHITE); b.setMinHeight(0); b.setMinimumHeight(0); b.setMinimumWidth(0);
+        b.setTextColor(FG); b.setMinHeight(0); b.setMinimumHeight(0); b.setMinimumWidth(0);
         b.setPadding(dp(12), dp(6), dp(12), dp(6));
         b.setTag(tag); focusStyle(b); b.setOnClickListener(v -> action.run());
         return b;
     }
-    private void styleHeroButton(Button button, boolean primary) {
-        button.setTextColor(primary ? BG : Color.WHITE);
+    private void styleHeroButton(View button, boolean primary) {
+        if (button instanceof TextView) ((TextView)button).setTextColor(primary ? (homeTheme.light ? Color.WHITE : BG) : FG);
         View.OnFocusChangeListener style = (view, focused) -> {
-            GradientDrawable background = shape(primary ? ACCENT : Color.argb(170,40,48,42), focused);
-            background.setCornerRadius(dp(24));
-            if (focused) background.setStroke(dp(2), Color.rgb(210,237,219));
+            GradientDrawable background = shape(primary ? ACCENT : PANEL, focused);
+            background.setCornerRadius(dp(homeTheme.actionRadius));
+            if (focused) background.setStroke(dp(2), ACCENT);
             view.setBackground(background);
             view.animate().cancel();
             view.animate().scaleX(1f).scaleY(1f).setDuration(180).start();
@@ -201,7 +231,7 @@ public class MainActivity extends Activity {
         button.setOnFocusChangeListener(style);
         style.onFocusChange(button, false);
     }
-    private void headerButton(LinearLayout row, Button button, int width) {
+    private void headerButton(LinearLayout row, View button, int width) {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(width), dp(38));
         p.setMargins(dp(10), 0, 0, 0); row.addView(button, p);
     }
@@ -210,18 +240,9 @@ public class MainActivity extends Activity {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         backdrop = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{backgroundColor, BG, Color.rgb(23, 27, 24)});
+            new int[]{BG, BG, BG});
         FrameLayout stage = new FrameLayout(this);
         stage.setBackground(backdrop);
-        ambientImage = new ImageView(this);
-        ambientImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        ambientImage.setAlpha(0.08f);
-        ambientImage.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        stage.addView(ambientImage, new FrameLayout.LayoutParams(-1, -1));
-        View shade = new View(this);
-        shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            new int[]{Color.argb(245,18,18,18), Color.argb(200,18,18,18), Color.argb(130,18,18,18)}));
-        stage.addView(shade, new FrameLayout.LayoutParams(-1, -1));
         root.setClipChildren(false); root.setClipToPadding(false);
         root.setPadding(dp(48), dp(20), dp(48), dp(14));
         stage.addView(root, new FrameLayout.LayoutParams(-1, -1));
@@ -234,7 +255,7 @@ public class MainActivity extends Activity {
         menuButton.setContentDescription("Открыть навигацию");
         LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(dp(42), dp(38));
         mp.rightMargin = dp(16); header.addView(menuButton, mp);
-        TextView brand = text("Медиа", 24, Color.WHITE);
+        TextView brand = text("Медиа", 24, FG);
         brand.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         brand.setLetterSpacing(0.06f);
         header.addView(brand, new LinearLayout.LayoutParams(0, dp(40), 1));
@@ -242,9 +263,7 @@ public class MainActivity extends Activity {
         vpn.setContentDescription("Открыть VPN. Удержание OK — выбрать приложение");
         vpn.setOnLongClickListener(v -> { chooseVpn(); return true; });
         headerButton(header, vpn, 66);
-        Button settings = button("", "settings", this::settingsMenu);
-        settings.setContentDescription("Настройки"); settings.setPadding(0,0,0,0); settings.setGravity(Gravity.CENTER);
-        settings.setCompoundDrawablesWithIntrinsicBounds(R.drawable.nav_settings, 0, 0, 0);
+        ImageButton settings = iconButton(R.drawable.nav_settings, "settings", "Настройки", this::settingsMenu);
         headerButton(header, settings, 44);
         clock = new TextClock(this);
         clock.setFormat12Hour("HH:mm"); clock.setFormat24Hour("HH:mm");
@@ -257,7 +276,7 @@ public class MainActivity extends Activity {
         nav.setGravity(Gravity.CENTER_VERTICAL);
         nav.setPadding(dp(10), dp(16), 0, dp(4));
         LinearLayout titles = new LinearLayout(this); titles.setOrientation(LinearLayout.VERTICAL);
-        sectionTitle = text("Главная", 16, Color.WHITE);
+        sectionTitle = text("Главная", 16, FG);
         sectionTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         titles.addView(sectionTitle);
         nav.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
@@ -284,7 +303,6 @@ public class MainActivity extends Activity {
         info = text("Удерживайте OK на приложении, чтобы закрепить его на главной", 12, MUTED);
         info.setPadding(0, dp(8), 0, 0); root.addView(info);
         // Initial focus moves to the first application after loading.
-        lastFocus = "";
     }
 
     private void reloadApps() {
@@ -381,7 +399,7 @@ public class MainActivity extends Activity {
         if (suggested) visible = homeSuggestions();
         previewImage = null; previewTitle = null; previewSubtitle = null;
         selectedApp = null; selectedTile = null;
-        ambientImage.setImageDrawable(null);
+        if (visible.isEmpty()) { backgroundColor=ACCENT; updateBackdrop(); }
         if (favoritesOnly && !visible.isEmpty()) {
             renderCarousel(visible, wanted);
             return;
@@ -413,8 +431,9 @@ public class MainActivity extends Activity {
             ImageView icon = new ImageView(this);
             icon.setImageDrawable(artwork(app.icon != null ? app.icon : getDrawable(local.quiettv.home.R.drawable.icon)));
             icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            icon.setBackground(shape(PANEL,false)); icon.setClipToOutline(true);
             tile.addView(icon, new LinearLayout.LayoutParams(dp(iconSize), dp(iconSize)));
-            TextView label = text(app.name, favoritesOnly ? 17 : 15, Color.WHITE);
+            TextView label = text(app.name, favoritesOnly ? 17 : 15, FG);
             label.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
             label.setGravity(Gravity.CENTER); label.setMaxLines(1);
             label.setEllipsize(TextUtils.TruncateAt.END);
@@ -472,7 +491,7 @@ public class MainActivity extends Activity {
             b.recycle();
             if (weight==0) return Color.rgb(30, 44, 35);
             Color.colorToHSV(Color.rgb((int)(red/weight),(int)(green/weight),(int)(blue/weight)),hsv);
-            hsv[1]=Math.min(0.22f, hsv[1]); hsv[2]=0.20f;
+            hsv[1]=Math.min(0.65f, Math.max(0.3f,hsv[1])); hsv[2]=0.65f;
             return Color.HSVToColor(hsv);
         } catch (RuntimeException e) { return Color.rgb(30, 44, 35); }
     }
@@ -497,10 +516,13 @@ public class MainActivity extends Activity {
             if (revision != previewGeneration || !image.isAttachedToWindow()) return;
             previewTitle.setText(app.name);
             previewSubtitle.setText("Медиа и развлечения  /  " + app.name);
-            ambientImage.setImageDrawable(artwork(app.banner));
             image.setImageDrawable(artwork(app.banner != null ? app.banner :
                 (app.icon != null ? app.icon : getDrawable(R.drawable.icon))));
-            int padding = dp(app.banner != null ? 8 : 20);
+            FrameLayout.LayoutParams artworkParams = (FrameLayout.LayoutParams)image.getLayoutParams();
+            artworkParams.width = app.banner != null ? -1 : dp(104);
+            artworkParams.height = app.banner != null ? -1 : dp(104);
+            artworkParams.gravity = Gravity.CENTER; image.setLayoutParams(artworkParams);
+            int padding = dp(4);
             image.setPadding(padding, padding, padding, padding);
             image.setAlpha(0f); image.setTranslationX(dp(16));
             description.setAlpha(0f); description.setTranslationY(dp(10));
@@ -520,7 +542,7 @@ public class MainActivity extends Activity {
         colorAnimation.setInterpolator(new DecelerateInterpolator());
         colorAnimation.addUpdateListener(animation -> {
             backgroundColor = (Integer)animation.getAnimatedValue();
-            backdrop.setColors(new int[]{backgroundColor, BG, Color.rgb(23,27,24)});
+            updateBackdrop();
         });
         colorAnimation.start();
     }
@@ -551,20 +573,18 @@ public class MainActivity extends Activity {
         carousel.setOverScrollMode(View.OVER_SCROLL_NEVER);
         carousel.setPadding(dp(18), dp(8), dp(18), dp(8));
         LinearLayout row = new LinearLayout(this); row.setClipChildren(false); row.setClipToPadding(false);
-        carousel.addView(row); grid.addView(carousel, new LinearLayout.LayoutParams(-1, dp(132)));
+        carousel.addView(row); grid.addView(carousel, new LinearLayout.LayoutParams(-1, dp(152)));
 
         int screenHeight = getResources().getConfiguration().screenHeightDp;
         int screenWidth = getResources().getConfiguration().screenWidthDp;
         int heroHeight = Math.max(190, Math.min(340, screenHeight - 260));
         LinearLayout hero = new LinearLayout(this); hero.setGravity(Gravity.CENTER_VERTICAL);
-        hero.setPadding(dp(18), dp(12), dp(12), dp(12));
+        hero.setPadding(dp(18), dp(8), dp(12), dp(8));
         heroDescription = new LinearLayout(this); heroDescription.setOrientation(LinearLayout.VERTICAL);
-        TextView eyebrow = text("QUIET TV  /  ВАШЕ ПРОСТРАНСТВО", 10, ACCENT);
-        eyebrow.setLetterSpacing(0.16f); heroDescription.addView(eyebrow);
-        previewTitle = text("", screenHeight < 500 ? 32 : 46, Color.WHITE);
+        previewTitle = text("", screenHeight < 500 ? 28 : 34, FG);
         previewTitle.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
         previewTitle.setMaxLines(1); previewTitle.setEllipsize(TextUtils.TruncateAt.END);
-        previewTitle.setPadding(0, dp(12), 0, dp(16)); heroDescription.addView(previewTitle);
+        previewTitle.setPadding(0, dp(8), 0, dp(8)); heroDescription.addView(previewTitle);
         previewSubtitle = text("", 13, MUTED);
         previewSubtitle.setMaxLines(1); previewSubtitle.setEllipsize(TextUtils.TruncateAt.END);
         previewSubtitle.setLineSpacing(dp(6), 1f); heroDescription.addView(previewSubtitle);
@@ -573,16 +593,14 @@ public class MainActivity extends Activity {
         launchButton = button("Открыть", "hero-open", () -> {
             if (selectedApp != null) launch(selectedApp.component);
         });
-        removeButton = button("", "hero-remove", () -> {
+        removeButton = iconButton(R.drawable.nav_remove, "hero-remove", "Убрать выбранное приложение с главного экрана", () -> {
             if (selectedApp != null) removeFromHome(selectedApp);
         });
-        removeButton.setCompoundDrawablesWithIntrinsicBounds(R.drawable.nav_remove, 0, 0, 0);
-        removeButton.setContentDescription("Убрать выбранное приложение с главного экрана"); removeButton.setPadding(0,0,0,0); removeButton.setGravity(Gravity.CENTER);
         styleHeroButton(launchButton, true); styleHeroButton(removeButton, false);
         actions.addView(launchButton, new LinearLayout.LayoutParams(dp(150), dp(42)));
         LinearLayout.LayoutParams removeParams = new LinearLayout.LayoutParams(dp(46), dp(42));
         removeParams.leftMargin = dp(12); actions.addView(removeButton, removeParams);
-        for (Button action : new Button[]{launchButton, removeButton}) {
+        for (View action : new View[]{launchButton, removeButton}) {
             action.setOnKeyListener((v, key, event) -> {
                 if (key != KeyEvent.KEYCODE_DPAD_UP) return false;
                 if (event.getAction() == KeyEvent.ACTION_DOWN && selectedTile != null) selectedTile.requestFocus();
@@ -590,15 +608,19 @@ public class MainActivity extends Activity {
             });
         }
         LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(-1, -2);
-        actionsParams.topMargin = dp(20); heroDescription.addView(actions, actionsParams);
+        actionsParams.topMargin = dp(12); heroDescription.addView(actions, actionsParams);
         hero.addView(heroDescription, new LinearLayout.LayoutParams(0, -2, 1));
         previewImage = new ImageView(this); previewImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        previewImage.setBackground(shape(PANEL,false)); previewImage.setClipToOutline(true);
         previewImage.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        hero.addView(previewImage, new LinearLayout.LayoutParams(dp(Math.min(320, screenWidth / 3)), -1));
+        FrameLayout previewFrame = new FrameLayout(this);
+        previewFrame.setBackground(shape(PANEL, false)); previewFrame.setClipToOutline(true);
+        previewFrame.addView(previewImage, new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER));
+        hero.addView(previewFrame, new LinearLayout.LayoutParams(dp(256), dp(144)));
         grid.addView(hero, new LinearLayout.LayoutParams(-1, dp(heroHeight)));
         contentScroll.post(() -> {
             if (!hero.isAttachedToWindow() || !favoritesOnly) return;
-            int available = contentScroll.getHeight() - contentScroll.getPaddingTop() - contentScroll.getPaddingBottom() - dp(132);
+            int available = contentScroll.getHeight() - contentScroll.getPaddingTop() - contentScroll.getPaddingBottom() - dp(152);
             hero.getLayoutParams().height = Math.max(dp(160), available);
             hero.requestLayout();
         });
@@ -612,15 +634,20 @@ public class MainActivity extends Activity {
             slot.setClipChildren(false); slot.setClipToPadding(false);
             LinearLayout tile = new LinearLayout(this);
             tile.setId(View.generateViewId());
-            tile.setGravity(Gravity.CENTER); tile.setPadding(dp(10), dp(10), dp(10), dp(10));
+            tile.setOrientation(LinearLayout.VERTICAL); tile.setGravity(Gravity.CENTER); tile.setPadding(dp(8), dp(8), dp(8), dp(8));
             tile.setTag(app.key); tile.setContentDescription(app.name); focusStyle(tile);
             ImageView icon = new ImageView(this); icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
             icon.setImageDrawable(artwork(app.icon != null ? app.icon : getDrawable(R.drawable.icon)));
-            tile.addView(icon, new LinearLayout.LayoutParams(-1, -1));
+            icon.setBackground(shape(HomeTheme.mix(PANEL,BG,0.3f), false)); icon.setClipToOutline(true);
+            tile.addView(icon, new LinearLayout.LayoutParams(dp(64), dp(64)));
+            TextView tileLabel = text(app.name, 12, FG); tileLabel.setMaxLines(1);
+            tileLabel.setEllipsize(TextUtils.TruncateAt.END); tileLabel.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(-1,-2);
+            nameParams.topMargin=dp(4); tile.addView(tileLabel,nameParams);
             tile.setOnFocusChangeListener((view, focused) -> {
-                view.setBackground(shape(focused ? Color.rgb(53,65,56) : PANEL, focused));
+                view.setBackground(shape(focused ? HomeTheme.mix(PANEL, ACCENT, 0.22f) : PANEL, focused));
                 view.animate().cancel();
-                view.animate().scaleX(focused ? 1.08f : 1f).scaleY(focused ? 1.08f : 1f)
+                view.animate().scaleX(focused ? 1.06f : 1f).scaleY(focused ? 1.06f : 1f)
                     .setDuration(220)
                     .setInterpolator(new DecelerateInterpolator()).start();
                 if (focused) {
@@ -648,8 +675,8 @@ public class MainActivity extends Activity {
             });
             tile.setOnClickListener(v -> launch(app.component));
             tile.setOnLongClickListener(v -> { appMenu(app); return true; });
-            slot.addView(tile, new FrameLayout.LayoutParams(dp(88), dp(88), Gravity.CENTER));
-            row.addView(slot, new LinearLayout.LayoutParams(dp(120), dp(116)));
+            slot.addView(tile, new FrameLayout.LayoutParams(dp(144), dp(104), Gravity.CENTER));
+            row.addView(slot, new LinearLayout.LayoutParams(dp(168), dp(136)));
             if (first == null) first = tile;
             if (app.key.equals(previewKey)) initial = app;
             if (app.key.equals(wanted)) { restore = tile; initial = app; }
@@ -673,7 +700,7 @@ public class MainActivity extends Activity {
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setClipChildren(false); panel.setClipToPadding(false);
         panel.setPadding(dp(24), dp(20), dp(24), dp(16));
-        panel.setBackground(shape(Color.argb(220, 23, 29, 25), false));
+        panel.setBackground(shape((BG & 0x00ffffff) | 0xdc000000, false));
         Button search = drawerButton("Поиск", "drawer-search", () -> {
             dialog.dismiss(); showSearch();
         });
@@ -686,17 +713,15 @@ public class MainActivity extends Activity {
         setDrawerIcon(search, R.drawable.nav_search);
         setDrawerIcon(home, R.drawable.nav_home);
         setDrawerIcon(spotify, R.drawable.nav_music);
-        spotify.setTextColor(Color.rgb(100, 221, 145));
+        spotify.setTextColor(ACCENT);
         for (Button button : new Button[]{search, home, spotify}) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(50));
             lp.bottomMargin = dp(8); panel.addView(button, lp);
         }
         panel.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-        Button all = button("", "drawer-all", () -> {
+        ImageButton all = iconButton(R.drawable.nav_apps, "drawer-all", "Все приложения", () -> {
             dialog.dismiss(); favoritesOnly = false; lastFocus = ""; renderApps();
         });
-        all.setContentDescription("Все приложения"); all.setPadding(0,0,0,0); all.setGravity(Gravity.CENTER);
-        all.setCompoundDrawablesWithIntrinsicBounds(R.drawable.nav_apps, 0, 0, 0);
         LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(dp(46), dp(42));
         al.bottomMargin = dp(14); panel.addView(all, al);
         dialog.setContentView(panel);
@@ -731,7 +756,7 @@ public class MainActivity extends Activity {
 
     private void setDrawerIcon(Button button, int resource) {
         Drawable icon = getDrawable(resource);
-        icon.setBounds(0, 0, dp(24), dp(24));
+        icon.setTint(FG); icon.setBounds(0, 0, dp(24), dp(24));
         button.setCompoundDrawables(icon, null, null, null);
         button.setCompoundDrawablePadding(dp(16));
     }
@@ -742,7 +767,7 @@ public class MainActivity extends Activity {
         b.setPadding(dp(18), 0, dp(12), 0);
         b.setBackground(shape(Color.TRANSPARENT, false));
         b.setOnFocusChangeListener((view, focused) -> {
-            view.setBackground(shape(focused ? Color.argb(90, 110, 190, 140) : Color.TRANSPARENT, focused));
+            view.setBackground(shape(focused ? HomeTheme.mix(PANEL, ACCENT, 0.18f) : Color.TRANSPARENT, focused));
             view.animate().cancel();
             view.animate().translationX(0).scaleX(1f).scaleY(1f).setDuration(180).start();
         });
@@ -770,13 +795,13 @@ public class MainActivity extends Activity {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(24), dp(22), dp(24), dp(20));
-        panel.setBackground(shape(Color.rgb(27, 33, 29), false));
+        panel.setBackground(shape(PANEL, false));
         LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL);
-        heading.addView(text("Поиск приложений", 24, Color.WHITE), new LinearLayout.LayoutParams(0, -2, 1));
+        heading.addView(text("Поиск приложений", 24, FG), new LinearLayout.LayoutParams(0, -2, 1));
         Button close = button("Закрыть", "search-close", dialog::dismiss);
         heading.addView(close, new LinearLayout.LayoutParams(dp(100), dp(40))); panel.addView(heading);
         EditText input = new EditText(this);
-        input.setSingleLine(true); input.setTextColor(Color.WHITE); input.setHintTextColor(MUTED);
+        input.setSingleLine(true); input.setTextColor(FG); input.setHintTextColor(MUTED);
         input.setTextSize(18); input.setHint("Название приложения");
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
         input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
@@ -924,7 +949,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Quiet TV").setItems(new String[]{
             "Настройки телевизора", "Приложения и память", "Выбрать VPN-приложение",
             "Сделать главным экраном", "Выбор другого главного экрана",
-            "Обновить список приложений", "О приложении и приватности", "Звуки интерфейса"
+            "Обновить список приложений", "О приложении и приватности", "Звуки интерфейса", "Тема главного экрана"
         }, (d,n) -> {
             switch(n) {
                 case 0: open(new Intent(Settings.ACTION_SETTINGS)); break;
@@ -936,18 +961,29 @@ public class MainActivity extends Activity {
                 case 5: reloadApps(); break;
                 case 6: about(); break;
                 case 7: soundSettings(); break;
+                case 8: themeSettings(); break;
             }
         }).setNegativeButton("Закрыть",null).show();
+    }
+    private void themeSettings() {
+        String[] names = {"Основная · синяя", "Зелёная · Spotify", "Светлая · PS5", "Тёплая · графит"};
+        new AlertDialog.Builder(this).setTitle("Тема главного экрана")
+            .setSingleChoiceItems(names,homeTheme.index,(dialog,index) -> {
+                dialog.dismiss();
+                if (index == homeTheme.index) return;
+                prefs.edit().putInt("home-theme",index).apply();
+                recreate();
+            }).setNegativeButton("Закрыть",null).show();
     }
     private void soundSettings() {
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(28), dp(24), dp(28), dp(24));
-        panel.setBackground(shape(Color.rgb(27,33,29), false));
-        panel.addView(text("Звуки интерфейса", 24, Color.WHITE));
+        panel.setBackground(shape(PANEL, false));
+        panel.addView(text("Звуки интерфейса", 24, FG));
         Switch enabled = new Switch(this); enabled.setText("Звуки навигации");
-        enabled.setTextColor(Color.WHITE); enabled.setPadding(0,dp(16),0,dp(16));
+        enabled.setTextColor(FG); enabled.setPadding(0,dp(16),0,dp(16));
         enabled.setChecked(prefs.getBoolean("sound-enabled", true)); enabled.setSoundEffectsEnabled(false);
         enabled.setOnCheckedChangeListener((v, checked) -> prefs.edit().putBoolean("sound-enabled", checked).apply());
         panel.addView(enabled, new LinearLayout.LayoutParams(-1,dp(60)));
@@ -1007,12 +1043,12 @@ public class MainActivity extends Activity {
     private String storageText() {
         try {
             StatFs fs = new StatFs(getFilesDir().getAbsolutePath());
-            return String.format(new Locale("ru"), "Свободно %.1f ГБ из %.1f ГБ · Quiet TV 0.6.0-dev",
+            return String.format(new Locale("ru"), "Свободно %.1f ГБ из %.1f ГБ · Quiet TV 0.7.0-dev",
                 fs.getAvailableBytes()/1073741824.0, fs.getTotalBytes()/1073741824.0);
-        } catch (RuntimeException e) { return "Quiet TV 0.6.0-dev"; }
+        } catch (RuntimeException e) { return "Quiet TV 0.7.0-dev"; }
     }
     private void about() {
-        new AlertDialog.Builder(this).setTitle("Quiet TV 0.6.0-dev — новый главный экран")
+        new AlertDialog.Builder(this).setTitle("Quiet TV 0.7.0-dev — новый главный экран")
             .setMessage("Оболочка не имеет разрешения на интернет, не содержит рекламы и аналитики. Избранное и назначение VPN сохраняются только на ТВ.\n\nКнопка VPN открывает установленный клиент: подключение выполняется в нём.\n\nОболочка не удаляет телеметрию Android или других приложений, не очищает оперативную память и не меняет прошивку." + "\n\n" + storageText())
             .setPositiveButton("Понятно", null).show();
     }

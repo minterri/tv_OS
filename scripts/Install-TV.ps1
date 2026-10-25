@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 try {
     $adb = (Get-Command $AdbPath -ErrorAction Stop).Source
-    if (-not $Apk) { $Apk = Join-Path (Split-Path $PSScriptRoot -Parent) "QuietTV-0.6.0-dev.apk" }
+    if (-not $Apk) { $Apk = Join-Path (Split-Path $PSScriptRoot -Parent) "QuietTV-0.7.0-dev.apk" }
     if (-not (Test-Path -LiteralPath $Apk -PathType Leaf)) { throw "APK file not found." }
     $lines = & $adb devices
     if ($LASTEXITCODE -ne 0) { throw "adb devices failed." }
