@@ -15,6 +15,7 @@ import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.animation.ValueAnimator;
 import android.animation.ArgbEvaluator;
+import android.view.animation.DecelerateInterpolator;
 import android.graphics.Typeface;
 import android.graphics.drawable.*;
 import android.os.*;
@@ -42,6 +43,9 @@ public class MainActivity extends Activity {
     private LinearLayout root;
     private GradientDrawable backdrop;
     private ValueAnimator colorAnimation;
+    private ValueAnimator carouselAnimation;
+    private int previewGeneration;
+    private LinearLayout heroDescription;
     private int backgroundColor = Color.rgb(25, 28, 43);
     private ImageView previewImage;
     private TextView previewTitle, previewSubtitle;
@@ -76,11 +80,15 @@ public class MainActivity extends Activity {
     @Override protected void onPause() {
         super.onPause();
         if (colorAnimation != null) colorAnimation.cancel();
+        if (carouselAnimation != null) carouselAnimation.cancel();
+        cancelPreview();
     }
 
     @Override protected void onDestroy() {
         generation++;
         if (colorAnimation != null) colorAnimation.cancel();
+        if (carouselAnimation != null) carouselAnimation.cancel();
+        cancelPreview();
         if (drawer != null) drawer.dismiss();
         if (searchDialog != null) searchDialog.dismiss();
         handler.removeCallbacksAndMessages(null);
@@ -110,6 +118,9 @@ public class MainActivity extends Activity {
         v.setBackground(shape(PANEL, false));
         v.setOnFocusChangeListener((view, focused) -> {
             view.setBackground(shape(focused ? Color.rgb(48, 54, 75) : PANEL, focused));
+            view.animate().cancel();
+            view.animate().scaleX(focused ? 1.04f : 1f).scaleY(focused ? 1.04f : 1f)
+                .setDuration(180).setInterpolator(new DecelerateInterpolator()).start();
             if (focused && view.getTag() instanceof String) lastFocus = (String)view.getTag();
         });
     }
@@ -133,7 +144,7 @@ public class MainActivity extends Activity {
         backdrop = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{backgroundColor, BG, Color.rgb(15, 19, 29)});
         root.setBackground(backdrop);
-        root.setPadding(dp(40), dp(22), dp(40), dp(16));
+        root.setPadding(dp(48), dp(20), dp(48), dp(14));
         setContentView(root);
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -142,7 +153,7 @@ public class MainActivity extends Activity {
         menuButton.setContentDescription("Открыть навигацию");
         LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(dp(42), dp(38));
         mp.rightMargin = dp(16); header.addView(menuButton, mp);
-        TextView brand = text("quiet tv", 20, Color.WHITE);
+        TextView brand = text("Quiet TV  /  Медиа", 20, Color.WHITE);
         brand.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         brand.setLetterSpacing(0.06f);
         header.addView(brand, new LinearLayout.LayoutParams(0, dp(40), 1));
@@ -160,12 +171,12 @@ public class MainActivity extends Activity {
 
         LinearLayout nav = new LinearLayout(this);
         nav.setGravity(Gravity.CENTER_VERTICAL);
-        nav.setPadding(0, dp(12), 0, dp(10));
+        nav.setPadding(dp(10), dp(16), 0, dp(4));
         LinearLayout titles = new LinearLayout(this); titles.setOrientation(LinearLayout.VERTICAL);
-        sectionTitle = text("Главная", 23, Color.WHITE);
+        sectionTitle = text("Главная", 16, Color.WHITE);
         sectionTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         titles.addView(sectionTitle);
-        sectionHint = text("Ваши приложения. Ничего лишнего.", 13, MUTED);
+        sectionHint = text("Ваши приложения. Ничего лишнего.", 11, MUTED);
         titles.addView(sectionHint);
         nav.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(nav);
@@ -247,8 +258,14 @@ public class MainActivity extends Activity {
 
     private void renderApps() {
         String wanted = lastFocus;
+        cancelPreview();
+        if (carouselAnimation != null) carouselAnimation.cancel();
         grid.removeAllViews();
         sectionTitle.setText(favoritesOnly ? "Главная" : "Все приложения");
+        grid.animate().cancel();
+        grid.setAlpha(0f); grid.setTranslationY(dp(8));
+        grid.animate().alpha(1f).translationY(0).setDuration(220)
+            .setInterpolator(new DecelerateInterpolator()).start();
         Set<String> starred = favorites();
         ArrayList<App> visible = new ArrayList<>();
         for (App a : apps) if (!favoritesOnly || starred.contains(a.key)) visible.add(a);
@@ -351,17 +368,45 @@ public class MainActivity extends Activity {
         } catch (RuntimeException e) { return Color.rgb(38, 46, 70); }
     }
 
+    private void cancelPreview() {
+        previewGeneration++;
+        if (previewImage != null) previewImage.animate().cancel();
+        if (heroDescription != null) heroDescription.animate().cancel();
+    }
+
     private void showPreview(App app) {
         if (previewImage == null) return;
+        boolean first = previewTitle.getText().length() == 0;
+        if (!first && app.key.equals(previewKey)) return;
+        cancelPreview();
         previewKey = app.key;
-        previewTitle.setText(app.name);
-        previewSubtitle.setText("OK — открыть приложение\nУдержание OK — действия");
-        previewImage.setImageDrawable(app.banner != null ? app.banner : app.icon);
-        previewImage.setPadding(dp(app.banner != null ? 0 : 24), dp(12), dp(app.banner != null ? 0 : 24), dp(12));
+        final int revision = previewGeneration;
+        final ImageView image = previewImage;
+        final LinearLayout description = heroDescription;
+        Runnable update = () -> {
+            if (revision != previewGeneration || !image.isAttachedToWindow()) return;
+            previewTitle.setText(app.name);
+            previewSubtitle.setText("Ваше пространство для просмотра и музыки\nOK — открыть  ·  Удержание OK — действия");
+            image.setImageDrawable(app.banner != null ? app.banner :
+                (app.icon != null ? app.icon : getDrawable(R.drawable.icon)));
+            int padding = dp(app.banner != null ? 8 : 32);
+            image.setPadding(padding, padding, padding, padding);
+            image.setAlpha(0f); image.setTranslationX(dp(16));
+            description.setAlpha(0f); description.setTranslationY(dp(10));
+            image.animate().alpha(1f).translationX(0).setDuration(280)
+                .setInterpolator(new DecelerateInterpolator()).start();
+            description.animate().alpha(1f).translationY(0).setDuration(240)
+                .setInterpolator(new DecelerateInterpolator()).start();
+        };
+        if (first) image.post(update);
+        else {
+            description.animate().alpha(0f).setDuration(90).start();
+            image.animate().alpha(0f).setDuration(90).withEndAction(update).start();
+        }
         if (colorAnimation != null) colorAnimation.cancel();
-        if (backgroundColor == app.color) return;
         colorAnimation = ValueAnimator.ofObject(new ArgbEvaluator(), backgroundColor, app.color);
-        colorAnimation.setDuration(240);
+        colorAnimation.setDuration(420);
+        colorAnimation.setInterpolator(new DecelerateInterpolator());
         colorAnimation.addUpdateListener(animation -> {
             backgroundColor = (Integer)animation.getAnimatedValue();
             backdrop.setColors(new int[]{backgroundColor, BG, Color.rgb(15,19,29)});
@@ -369,76 +414,100 @@ public class MainActivity extends Activity {
         colorAnimation.start();
     }
 
+    /** Keep focus scrolling under one animator, including rapid repeated D-pad presses. */
+    private class AppCarousel extends HorizontalScrollView {
+        AppCarousel() { super(MainActivity.this); }
+        @Override public boolean requestChildRectangleOnScreen(View child, Rect rect, boolean immediate) {
+            return false;
+        }
+        void reveal(View tile) {
+            if (carouselAnimation != null) carouselAnimation.cancel();
+            int maximum = Math.max(0, getChildAt(0).getWidth() - getWidth());
+            int target = Math.max(0, Math.min(maximum, tile.getLeft() - dp(18)));
+            carouselAnimation = ValueAnimator.ofInt(getScrollX(), target);
+            carouselAnimation.setDuration(280);
+            carouselAnimation.setInterpolator(new DecelerateInterpolator());
+            carouselAnimation.addUpdateListener(a -> scrollTo((Integer)a.getAnimatedValue(), 0));
+            carouselAnimation.start();
+        }
+    }
+
     private void renderCarousel(ArrayList<App> visible, String wanted) {
-        int screenHeight = Math.round(getResources().getDisplayMetrics().heightPixels / getResources().getDisplayMetrics().density);
-        int heroHeight = Math.max(110, Math.min(220, screenHeight - 350));
-        LinearLayout hero = new LinearLayout(this); hero.setGravity(Gravity.CENTER_VERTICAL);
-        hero.setPadding(dp(14), 0, dp(14), dp(12));
-        LinearLayout description = new LinearLayout(this); description.setOrientation(LinearLayout.VERTICAL);
-        TextView eyebrow = text("ВЫБРАНО ДЛЯ ПРОСМОТРА", 11, ACCENT);
-        eyebrow.setLetterSpacing(0.12f); description.addView(eyebrow);
-        previewTitle = text("", 32, Color.WHITE);
-        previewTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        previewTitle.setMaxLines(2); previewTitle.setEllipsize(TextUtils.TruncateAt.END);
-        previewTitle.setPadding(0, dp(8), 0, dp(10)); description.addView(previewTitle);
-        previewSubtitle = text("", 13, MUTED); description.addView(previewSubtitle);
-        hero.addView(description, new LinearLayout.LayoutParams(0, -2, 1));
-        previewImage = new ImageView(this); previewImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        hero.addView(previewImage, new LinearLayout.LayoutParams(dp(300), -1));
-        grid.addView(hero, new LinearLayout.LayoutParams(-1, dp(heroHeight)));
-        HorizontalScrollView carousel = new HorizontalScrollView(this);
+        grid.setClipChildren(false); grid.setClipToPadding(false);
+        AppCarousel carousel = new AppCarousel();
         carousel.setHorizontalScrollBarEnabled(false); carousel.setClipToPadding(false);
-        carousel.setPadding(dp(7), dp(6), dp(7), dp(6));
+        carousel.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        carousel.setPadding(dp(12), dp(16), dp(12), dp(16));
         LinearLayout row = new LinearLayout(this); row.setClipChildren(false); row.setClipToPadding(false);
-        carousel.addView(row); grid.addView(carousel, new LinearLayout.LayoutParams(-1, dp(174)));
+        carousel.addView(row); grid.addView(carousel, new LinearLayout.LayoutParams(-1, dp(132)));
+
+        int screenHeight = getResources().getConfiguration().screenHeightDp;
+        int screenWidth = getResources().getConfiguration().screenWidthDp;
+        int heroHeight = Math.max(150, Math.min(340, screenHeight - 282));
+        LinearLayout hero = new LinearLayout(this); hero.setGravity(Gravity.CENTER_VERTICAL);
+        hero.setPadding(dp(18), dp(12), dp(12), dp(12));
+        heroDescription = new LinearLayout(this); heroDescription.setOrientation(LinearLayout.VERTICAL);
+        TextView eyebrow = text("ВАШИ ПРИЛОЖЕНИЯ", 11, ACCENT);
+        eyebrow.setLetterSpacing(0.16f); heroDescription.addView(eyebrow);
+        previewTitle = text("", screenHeight < 500 ? 30 : 42, Color.WHITE);
+        previewTitle.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        previewTitle.setMaxLines(2); previewTitle.setEllipsize(TextUtils.TruncateAt.END);
+        previewTitle.setPadding(0, dp(12), 0, dp(16)); heroDescription.addView(previewTitle);
+        previewSubtitle = text("", 13, MUTED);
+        previewSubtitle.setLineSpacing(dp(6), 1f); heroDescription.addView(previewSubtitle);
+        hero.addView(heroDescription, new LinearLayout.LayoutParams(0, -2, 1));
+        previewImage = new ImageView(this); previewImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        previewImage.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        hero.addView(previewImage, new LinearLayout.LayoutParams(dp(Math.min(420, screenWidth * 2 / 5)), -1));
+        grid.addView(hero, new LinearLayout.LayoutParams(-1, dp(heroHeight)));
+
         View first = null, restore = null;
         App initial = visible.get(0);
         for (int i=0; i<visible.size(); i++) {
             App app = visible.get(i);
-            LinearLayout tile = new LinearLayout(this); tile.setOrientation(LinearLayout.VERTICAL);
-            tile.setGravity(Gravity.CENTER); tile.setPadding(dp(12), dp(10), dp(12), dp(10));
+            LinearLayout tile = new LinearLayout(this);
+            tile.setGravity(Gravity.CENTER); tile.setPadding(dp(10), dp(10), dp(10), dp(10));
             tile.setTag(app.key); tile.setContentDescription(app.name); focusStyle(tile);
             ImageView icon = new ImageView(this); icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
             icon.setImageDrawable(app.icon != null ? app.icon : getDrawable(R.drawable.icon));
-            tile.addView(icon,new LinearLayout.LayoutParams(dp(90),dp(90)));
-            TextView name = text(app.name,15,Color.WHITE); name.setMaxLines(1);
-            name.setEllipsize(TextUtils.TruncateAt.END); name.setGravity(Gravity.CENTER);
-            name.setPadding(0,dp(10),0,0); tile.addView(name,new LinearLayout.LayoutParams(-1,-2));
-            tile.setOnFocusChangeListener((view,focused) -> {
-                view.setBackground(shape(focused ? Color.rgb(48,54,75) : PANEL,focused));
+            tile.addView(icon, new LinearLayout.LayoutParams(-1, -1));
+            tile.setOnFocusChangeListener((view, focused) -> {
+                view.setBackground(shape(focused ? Color.rgb(58,65,82) : PANEL, focused));
                 view.animate().cancel();
-                view.animate().scaleX(focused ? 1.035f : 1f).scaleY(focused ? 1.035f : 1f).setDuration(120).start();
+                view.animate().scaleX(focused ? 1.16f : 1f).scaleY(focused ? 1.16f : 1f)
+                    .translationY(focused ? dp(2) : 0).setDuration(220)
+                    .setInterpolator(new DecelerateInterpolator()).start();
                 if (focused) {
-                    lastFocus=app.key; showPreview(app);
+                    lastFocus = app.key; showPreview(app);
                     carousel.post(() -> {
-                        if (view.isAttachedToWindow() && view.hasFocus())
-                            carousel.smoothScrollTo(Math.max(0,view.getLeft()-(carousel.getWidth()-view.getWidth())/2),0);
+                        if (view.isAttachedToWindow() && view.hasFocus()) carousel.reveal(view);
                     });
                 }
             });
             tile.setOnHoverListener((view,event) -> {
-                if (event.getAction()==android.view.MotionEvent.ACTION_HOVER_ENTER) view.requestFocus();
+                if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) view.requestFocus();
                 return false;
             });
-            if (i==0) tile.setOnKeyListener((view,key,event) -> {
-                if (key!=KeyEvent.KEYCODE_DPAD_LEFT) return false;
-                if (event.getAction()==KeyEvent.ACTION_DOWN && event.getRepeatCount()==0) showDrawer();
+            if (i == 0) tile.setOnKeyListener((view,key,event) -> {
+                if (key != KeyEvent.KEYCODE_DPAD_LEFT) return false;
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) showDrawer();
                 return true;
             });
             tile.setOnClickListener(v -> launch(app.component));
             tile.setOnLongClickListener(v -> { appMenu(app); return true; });
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(164),dp(152));
-            lp.setMargins(dp(6),dp(4),dp(6),dp(4)); row.addView(tile,lp);
-            if (first==null) first=tile;
-            if (app.key.equals(previewKey)) initial=app;
-            if (app.key.equals(wanted)) { restore=tile; initial=app; }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(88), dp(88));
+            lp.setMargins(dp(8), dp(6), dp(8), dp(6)); row.addView(tile, lp);
+            if (first == null) first = tile;
+            if (app.key.equals(previewKey)) initial = app;
+            if (app.key.equals(wanted)) { restore = tile; initial = app; }
         }
         showPreview(initial);
-        if (drawer!=null || searchDialog!=null) return;
-        if (restore!=null) restore.requestFocus();
-        else if (wanted.isEmpty() && first!=null) first.requestFocus();
-        else if (getCurrentFocus()==null) menuButton.requestFocus();
+        if (drawer != null || searchDialog != null) return;
+        if (restore != null) restore.requestFocus();
+        else if (wanted.isEmpty() && first != null) first.requestFocus();
+        else if (getCurrentFocus() == null) menuButton.requestFocus();
     }
+
 
     private void openPlayStore() {
         Intent store = getPackageManager().getLeanbackLaunchIntentForPackage("com.android.vending");
@@ -722,12 +791,12 @@ public class MainActivity extends Activity {
     private String storageText() {
         try {
             StatFs fs = new StatFs(getFilesDir().getAbsolutePath());
-            return String.format(new Locale("ru"), "Свободно %.1f ГБ из %.1f ГБ · Quiet TV 0.4",
+            return String.format(new Locale("ru"), "Свободно %.1f ГБ из %.1f ГБ · Quiet TV 0.5.0-dev",
                 fs.getAvailableBytes()/1073741824.0, fs.getTotalBytes()/1073741824.0);
-        } catch (RuntimeException e) { return "Quiet TV 0.4"; }
+        } catch (RuntimeException e) { return "Quiet TV 0.5.0-dev"; }
     }
     private void about() {
-        new AlertDialog.Builder(this).setTitle("Quiet TV 0.4 — новый главный экран")
+        new AlertDialog.Builder(this).setTitle("Quiet TV 0.5.0-dev — новый главный экран")
             .setMessage("Оболочка не имеет разрешения на интернет, не содержит рекламы и аналитики. Избранное и назначение VPN сохраняются только на ТВ.\n\nКнопка VPN открывает установленный клиент: подключение выполняется в нём.\n\nОболочка не удаляет телеметрию Android или других приложений, не очищает оперативную память и не меняет прошивку." + "\n\n" + storageText())
             .setPositiveButton("Понятно", null).show();
     }
