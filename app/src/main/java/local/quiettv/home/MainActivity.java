@@ -29,24 +29,36 @@ import java.util.concurrent.*;
 
 /** Offline TV launcher. No analytics, network clients, services or package mutations. */
 public class MainActivity extends Activity {
-    private static final int BG = Color.rgb(8, 12, 21);
-    private static final int PANEL = Color.argb(110, 31, 39, 54);
-    private static final int ACCENT = Color.rgb(235, 242, 255);
-    private static final int MUTED = Color.rgb(139, 146, 165);
+    private static final int BG = Color.rgb(18, 18, 18);
+    private static final int PANEL = Color.argb(170, 40, 43, 40);
+    private static final int ACCENT = Color.rgb(119, 204, 150);
+    private static final int MUTED = Color.rgb(168, 176, 170);
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ArrayList<App> apps = new ArrayList<>();
     private android.content.SharedPreferences prefs;
     private LinearLayout content, grid;
-    private TextView info, sectionTitle, sectionHint;
+    private TextView info, sectionTitle;
     private TextClock clock;
     private LinearLayout root;
+    private ScrollView contentScroll;
+    private NavigationSound navigationSound;
+    private boolean appsDirty = true, loadingApps;
+    private int catalogRevision;
+    private long lastNavigationAt;
+    private final Runnable refreshCatalog = () -> { if (hasWindowFocus() && appsDirty) reloadApps(); };
+    private final BroadcastReceiver packageChanges = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            appsDirty = true; catalogRevision++;
+            handler.removeCallbacks(refreshCatalog); handler.postDelayed(refreshCatalog, 250);
+        }
+    };
     private GradientDrawable backdrop;
     private ValueAnimator colorAnimation;
     private ValueAnimator carouselAnimation;
     private int previewGeneration;
     private LinearLayout heroDescription;
-    private int backgroundColor = Color.rgb(25, 28, 43);
+    private int backgroundColor = Color.rgb(30, 44, 35);
     private ImageView previewImage;
     private ImageView ambientImage;
     private Button launchButton, removeButton;
@@ -63,13 +75,19 @@ public class MainActivity extends Activity {
         String key, name;
         ComponentName component;
         Drawable icon, banner;
-        int color = Color.rgb(38, 46, 70);
+        int color = Color.rgb(30, 44, 35);
     }
 
     @Override public void onCreate(Bundle state) {
         setTheme(R.style.QuietTheme);
         super.onCreate(state);
         prefs = getSharedPreferences("quiet-tv", MODE_PRIVATE);
+        navigationSound = new NavigationSound(this, prefs);
+        IntentFilter changes = new IntentFilter();
+        changes.addAction(Intent.ACTION_PACKAGE_ADDED); changes.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        changes.addAction(Intent.ACTION_PACKAGE_CHANGED); changes.addDataScheme("package");
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(packageChanges, changes, Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(packageChanges, changes);
         if (state != null) favoritesOnly = state.getBoolean("favorites", true);
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
@@ -79,7 +97,9 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        reloadApps();
+        lastNavigationAt = 0;
+        if (appsDirty) reloadApps();
+        else if (selectedApp != null) { previewKey = ""; showPreview(selectedApp); }
     }
 
     @Override protected void onPause() {
@@ -98,6 +118,8 @@ public class MainActivity extends Activity {
         if (searchDialog != null) searchDialog.dismiss();
         handler.removeCallbacksAndMessages(null);
         loader.shutdownNow();
+        unregisterReceiver(packageChanges);
+        navigationSound.release();
         super.onDestroy();
     }
 
@@ -107,6 +129,32 @@ public class MainActivity extends Activity {
     }
 
     private int dp(float n) { return Math.round(n * getResources().getDisplayMetrics().density); }
+    private Drawable artwork(Drawable source) {
+        if (source == null) return null;
+        Drawable.ConstantState state = source.getConstantState();
+        // Each ImageView owns its bounds; do not share mutable drawable instances.
+        if (state != null) return state.newDrawable(getResources()).mutate();
+        int width = source.getIntrinsicWidth() > 0 ? Math.min(640, source.getIntrinsicWidth()) : dp(96);
+        int height = source.getIntrinsicHeight() > 0 ? Math.min(360, source.getIntrinsicHeight()) : dp(96);
+        return thumbnail(source, width, height);
+    }
+    private void watchFocus(View rootView) {
+        rootView.getViewTreeObserver().addOnGlobalFocusChangeListener((oldFocus, newFocus) -> {
+            if (oldFocus != null && newFocus != null && SystemClock.uptimeMillis() - lastNavigationAt < 300)
+                navigationSound.play();
+        });
+    }
+    private void recordNavigation(KeyEvent event) {
+        int key = event.getKeyCode();
+        if (event.getAction() == KeyEvent.ACTION_DOWN && (key == KeyEvent.KEYCODE_DPAD_LEFT ||
+            key == KeyEvent.KEYCODE_DPAD_RIGHT || key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN))
+            lastNavigationAt = SystemClock.uptimeMillis();
+    }
+    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_HOVER_MOVE || event.getActionMasked() == MotionEvent.ACTION_HOVER_ENTER)
+            lastNavigationAt = SystemClock.uptimeMillis();
+        return super.dispatchGenericMotionEvent(event);
+    }
     private TextView text(String value, int size, int color) {
         TextView t = new TextView(this);
         t.setText(value); t.setTextSize(size); t.setTextColor(color);
@@ -120,11 +168,12 @@ public class MainActivity extends Activity {
     }
     private void focusStyle(View v) {
         v.setFocusable(true);
+        v.setSoundEffectsEnabled(false);
         v.setBackground(shape(PANEL, false));
         v.setOnFocusChangeListener((view, focused) -> {
-            view.setBackground(shape(focused ? Color.rgb(48, 54, 75) : PANEL, focused));
+            view.setBackground(shape(focused ? Color.rgb(48, 60, 51) : PANEL, focused));
             view.animate().cancel();
-            view.animate().scaleX(focused ? 1.04f : 1f).scaleY(focused ? 1.04f : 1f)
+            view.animate().scaleX(1f).scaleY(1f)
                 .setDuration(180).setInterpolator(new DecelerateInterpolator()).start();
             if (focused && view.getTag() instanceof String) lastFocus = (String)view.getTag();
         });
@@ -141,12 +190,12 @@ public class MainActivity extends Activity {
     private void styleHeroButton(Button button, boolean primary) {
         button.setTextColor(primary ? BG : Color.WHITE);
         View.OnFocusChangeListener style = (view, focused) -> {
-            GradientDrawable background = shape(primary ? Color.rgb(237,243,255) : Color.argb(150,40,52,72), focused);
+            GradientDrawable background = shape(primary ? ACCENT : Color.argb(170,40,48,42), focused);
             background.setCornerRadius(dp(24));
-            if (focused) background.setStroke(dp(2), primary ? Color.rgb(130,183,255) : Color.WHITE);
+            if (focused) background.setStroke(dp(2), Color.rgb(210,237,219));
             view.setBackground(background);
             view.animate().cancel();
-            view.animate().scaleX(focused ? 1.04f : 1f).scaleY(focused ? 1.04f : 1f).setDuration(180).start();
+            view.animate().scaleX(1f).scaleY(1f).setDuration(180).start();
             if (focused) lastFocus = (String)view.getTag();
         };
         button.setOnFocusChangeListener(style);
@@ -161,22 +210,23 @@ public class MainActivity extends Activity {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         backdrop = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{backgroundColor, BG, Color.rgb(15, 19, 29)});
+            new int[]{backgroundColor, BG, Color.rgb(23, 27, 24)});
         FrameLayout stage = new FrameLayout(this);
         stage.setBackground(backdrop);
         ambientImage = new ImageView(this);
-        ambientImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        ambientImage.setAlpha(0.18f);
+        ambientImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        ambientImage.setAlpha(0.08f);
         ambientImage.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         stage.addView(ambientImage, new FrameLayout.LayoutParams(-1, -1));
         View shade = new View(this);
         shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            new int[]{Color.argb(245,8,12,21), Color.argb(175,8,12,21), Color.argb(60,8,12,21)}));
+            new int[]{Color.argb(245,18,18,18), Color.argb(200,18,18,18), Color.argb(130,18,18,18)}));
         stage.addView(shade, new FrameLayout.LayoutParams(-1, -1));
         root.setClipChildren(false); root.setClipToPadding(false);
         root.setPadding(dp(48), dp(20), dp(48), dp(14));
         stage.addView(root, new FrameLayout.LayoutParams(-1, -1));
         setContentView(stage);
+        watchFocus(stage);
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
         menuButton = button("☰", "menu", this::showDrawer);
@@ -193,7 +243,7 @@ public class MainActivity extends Activity {
         vpn.setOnLongClickListener(v -> { chooseVpn(); return true; });
         headerButton(header, vpn, 66);
         Button settings = button("", "settings", this::settingsMenu);
-        settings.setContentDescription("Настройки");
+        settings.setContentDescription("Настройки"); settings.setPadding(0,0,0,0); settings.setGravity(Gravity.CENTER);
         settings.setCompoundDrawablesWithIntrinsicBounds(R.drawable.nav_settings, 0, 0, 0);
         headerButton(header, settings, 44);
         clock = new TextClock(this);
@@ -210,14 +260,23 @@ public class MainActivity extends Activity {
         sectionTitle = text("Главная", 16, Color.WHITE);
         sectionTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         titles.addView(sectionTitle);
-        sectionHint = text("Ваши приложения. Ничего лишнего.", 11, MUTED);
-        titles.addView(sectionHint);
         nav.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(nav);
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setClipChildren(false);
-        scroll.setClipToPadding(false); scroll.setVerticalScrollBarEnabled(false);
+        ScrollView scroll = new ScrollView(this) {
+            @Override public boolean requestChildRectangleOnScreen(View child, Rect rect, boolean immediate) {
+                return !favoritesOnly && super.requestChildRectangleOnScreen(child, rect, immediate);
+            }
+            @Override public boolean onInterceptTouchEvent(MotionEvent event) {
+                return !favoritesOnly && super.onInterceptTouchEvent(event);
+            }
+            @Override public boolean onTouchEvent(MotionEvent event) {
+                return !favoritesOnly && super.onTouchEvent(event);
+            }
+        };
+        contentScroll = scroll;
+        scroll.setClipChildren(true);
+        scroll.setClipToPadding(true); scroll.setVerticalScrollBarEnabled(false);
         scroll.setPadding(dp(3), dp(3), dp(3), dp(12));
         grid = new LinearLayout(this); grid.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(grid);
@@ -229,6 +288,10 @@ public class MainActivity extends Activity {
     }
 
     private void reloadApps() {
+        appsDirty = true;
+        if (loadingApps) return;
+        loadingApps = true;
+        final int revision = catalogRevision;
         final int current = ++generation;
         if (apps.isEmpty()) {
             grid.removeAllViews();
@@ -255,11 +318,18 @@ public class MainActivity extends Activity {
                     app.component = new ComponentName(ri.activityInfo.packageName, ri.activityInfo.name);
                     app.key = app.component.flattenToString();
                     app.name = ri.loadLabel(pm).toString();
-                    try { app.icon = ri.loadIcon(pm); } catch (RuntimeException ignored) { }
+                    try {
+                        int resource = ri.getIconResource();
+                        if (resource != 0) app.icon = pm.getResourcesForApplication(ri.activityInfo.applicationInfo)
+                            .getDrawableForDensity(resource, Math.max(320, getResources().getDisplayMetrics().densityDpi), null);
+                        if (app.icon == null) app.icon = ri.loadIcon(pm);
+                    } catch (RuntimeException | PackageManager.NameNotFoundException ignored) {
+                        try { app.icon = ri.loadIcon(pm); } catch (RuntimeException unavailable) { }
+                    }
                     try {
                         Drawable banner = ri.activityInfo.loadBanner(pm);
                         if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
-                        if (banner != null) app.banner = thumbnail(banner, 320, 180);
+                        app.banner = banner;
                     } catch (RuntimeException ignored) { }
                     app.color = extractColor(app.icon);
                     found.add(app);
@@ -270,8 +340,10 @@ public class MainActivity extends Activity {
             final String loadError = error;
             runOnUiThread(() -> {
                 if (isDestroyed() || current != generation) return;
+                loadingApps = false; appsDirty = revision != catalogRevision;
                 apps.clear(); apps.addAll(found); renderApps();
                 if (loadError != null) toast(loadError);
+                if (appsDirty) handler.post(refreshCatalog);
             });
         });
     }
@@ -298,7 +370,8 @@ public class MainActivity extends Activity {
         grid.removeAllViews();
         sectionTitle.setText(favoritesOnly ? "Главная" : "Все приложения");
         grid.animate().cancel();
-        grid.setAlpha(0f); grid.setTranslationY(dp(8));
+        contentScroll.scrollTo(0, 0);
+        grid.setAlpha(0f); grid.setTranslationY(0);
         grid.animate().alpha(1f).translationY(0).setDuration(220)
             .setInterpolator(new DecelerateInterpolator()).start();
         Set<String> starred = favorites();
@@ -306,7 +379,6 @@ public class MainActivity extends Activity {
         for (App a : apps) if (!favoritesOnly || starred.contains(a.key)) visible.add(a);
         boolean suggested = favoritesOnly && starred.isEmpty() && !prefs.getBoolean("home-configured", false);
         if (suggested) visible = homeSuggestions();
-        sectionHint.setText(favoritesOnly ? (suggested ? "Закрепите любимые приложения удержанием OK" : "Ваши приложения. Ничего лишнего.") : "Выберите приложение или закрепите его на главной");
         previewImage = null; previewTitle = null; previewSubtitle = null;
         selectedApp = null; selectedTile = null;
         ambientImage.setImageDrawable(null);
@@ -339,7 +411,7 @@ public class MainActivity extends Activity {
                 (starred.contains(app.key) ? ", на главной" : ""));
             focusStyle(tile);
             ImageView icon = new ImageView(this);
-            icon.setImageDrawable(app.icon != null ? app.icon : getDrawable(local.quiettv.home.R.drawable.icon));
+            icon.setImageDrawable(artwork(app.icon != null ? app.icon : getDrawable(local.quiettv.home.R.drawable.icon)));
             icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
             tile.addView(icon, new LinearLayout.LayoutParams(dp(iconSize), dp(iconSize)));
             TextView label = text(app.name, favoritesOnly ? 17 : 15, Color.WHITE);
@@ -385,7 +457,7 @@ public class MainActivity extends Activity {
     }
 
     private int extractColor(Drawable icon) {
-        if (icon == null) return Color.rgb(38, 46, 70);
+        if (icon == null) return Color.rgb(30, 44, 35);
         try {
             Bitmap b = ((BitmapDrawable)thumbnail(icon, 24, 24)).getBitmap();
             double red=0, green=0, blue=0, weight=0;
@@ -398,11 +470,11 @@ public class MainActivity extends Activity {
                 red+=Color.red(c)*w; green+=Color.green(c)*w; blue+=Color.blue(c)*w; weight+=w;
             }
             b.recycle();
-            if (weight==0) return Color.rgb(38, 46, 70);
+            if (weight==0) return Color.rgb(30, 44, 35);
             Color.colorToHSV(Color.rgb((int)(red/weight),(int)(green/weight),(int)(blue/weight)),hsv);
-            hsv[1]=Math.min(0.65f, Math.max(0.35f,hsv[1])); hsv[2]=0.28f;
+            hsv[1]=Math.min(0.22f, hsv[1]); hsv[2]=0.20f;
             return Color.HSVToColor(hsv);
-        } catch (RuntimeException e) { return Color.rgb(38, 46, 70); }
+        } catch (RuntimeException e) { return Color.rgb(30, 44, 35); }
     }
 
     private void cancelPreview() {
@@ -425,10 +497,10 @@ public class MainActivity extends Activity {
             if (revision != previewGeneration || !image.isAttachedToWindow()) return;
             previewTitle.setText(app.name);
             previewSubtitle.setText("Медиа и развлечения  /  " + app.name);
-            ambientImage.setImageDrawable(app.banner != null ? app.banner : app.icon);
-            image.setImageDrawable(app.banner != null ? app.banner :
-                (app.icon != null ? app.icon : getDrawable(R.drawable.icon)));
-            int padding = dp(app.banner != null ? 8 : 32);
+            ambientImage.setImageDrawable(artwork(app.banner));
+            image.setImageDrawable(artwork(app.banner != null ? app.banner :
+                (app.icon != null ? app.icon : getDrawable(R.drawable.icon))));
+            int padding = dp(app.banner != null ? 8 : 20);
             image.setPadding(padding, padding, padding, padding);
             image.setAlpha(0f); image.setTranslationX(dp(16));
             description.setAlpha(0f); description.setTranslationY(dp(10));
@@ -448,7 +520,7 @@ public class MainActivity extends Activity {
         colorAnimation.setInterpolator(new DecelerateInterpolator());
         colorAnimation.addUpdateListener(animation -> {
             backgroundColor = (Integer)animation.getAnimatedValue();
-            backdrop.setColors(new int[]{backgroundColor, BG, Color.rgb(15,19,29)});
+            backdrop.setColors(new int[]{backgroundColor, BG, Color.rgb(23,27,24)});
         });
         colorAnimation.start();
     }
@@ -475,15 +547,15 @@ public class MainActivity extends Activity {
     private void renderCarousel(ArrayList<App> visible, String wanted) {
         grid.setClipChildren(false); grid.setClipToPadding(false);
         AppCarousel carousel = new AppCarousel();
-        carousel.setHorizontalScrollBarEnabled(false); carousel.setClipToPadding(false);
+        carousel.setHorizontalScrollBarEnabled(false); carousel.setClipToPadding(true);
         carousel.setOverScrollMode(View.OVER_SCROLL_NEVER);
         carousel.setPadding(dp(18), dp(8), dp(18), dp(8));
         LinearLayout row = new LinearLayout(this); row.setClipChildren(false); row.setClipToPadding(false);
-        carousel.addView(row); grid.addView(carousel, new LinearLayout.LayoutParams(-1, dp(148)));
+        carousel.addView(row); grid.addView(carousel, new LinearLayout.LayoutParams(-1, dp(132)));
 
         int screenHeight = getResources().getConfiguration().screenHeightDp;
         int screenWidth = getResources().getConfiguration().screenWidthDp;
-        int heroHeight = Math.max(270, Math.min(380, screenHeight - 296));
+        int heroHeight = Math.max(190, Math.min(340, screenHeight - 260));
         LinearLayout hero = new LinearLayout(this); hero.setGravity(Gravity.CENTER_VERTICAL);
         hero.setPadding(dp(18), dp(12), dp(12), dp(12));
         heroDescription = new LinearLayout(this); heroDescription.setOrientation(LinearLayout.VERTICAL);
@@ -491,7 +563,7 @@ public class MainActivity extends Activity {
         eyebrow.setLetterSpacing(0.16f); heroDescription.addView(eyebrow);
         previewTitle = text("", screenHeight < 500 ? 32 : 46, Color.WHITE);
         previewTitle.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
-        previewTitle.setMaxLines(2); previewTitle.setEllipsize(TextUtils.TruncateAt.END);
+        previewTitle.setMaxLines(1); previewTitle.setEllipsize(TextUtils.TruncateAt.END);
         previewTitle.setPadding(0, dp(12), 0, dp(16)); heroDescription.addView(previewTitle);
         previewSubtitle = text("", 13, MUTED);
         previewSubtitle.setMaxLines(1); previewSubtitle.setEllipsize(TextUtils.TruncateAt.END);
@@ -505,7 +577,7 @@ public class MainActivity extends Activity {
             if (selectedApp != null) removeFromHome(selectedApp);
         });
         removeButton.setCompoundDrawablesWithIntrinsicBounds(R.drawable.nav_remove, 0, 0, 0);
-        removeButton.setContentDescription("Убрать выбранное приложение с главного экрана");
+        removeButton.setContentDescription("Убрать выбранное приложение с главного экрана"); removeButton.setPadding(0,0,0,0); removeButton.setGravity(Gravity.CENTER);
         styleHeroButton(launchButton, true); styleHeroButton(removeButton, false);
         actions.addView(launchButton, new LinearLayout.LayoutParams(dp(150), dp(42)));
         LinearLayout.LayoutParams removeParams = new LinearLayout.LayoutParams(dp(46), dp(42));
@@ -520,10 +592,16 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(-1, -2);
         actionsParams.topMargin = dp(20); heroDescription.addView(actions, actionsParams);
         hero.addView(heroDescription, new LinearLayout.LayoutParams(0, -2, 1));
-        previewImage = new ImageView(this); previewImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        previewImage = new ImageView(this); previewImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         previewImage.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        hero.addView(previewImage, new LinearLayout.LayoutParams(dp(Math.min(420, screenWidth * 2 / 5)), -1));
+        hero.addView(previewImage, new LinearLayout.LayoutParams(dp(Math.min(320, screenWidth / 3)), -1));
         grid.addView(hero, new LinearLayout.LayoutParams(-1, dp(heroHeight)));
+        contentScroll.post(() -> {
+            if (!hero.isAttachedToWindow() || !favoritesOnly) return;
+            int available = contentScroll.getHeight() - contentScroll.getPaddingTop() - contentScroll.getPaddingBottom() - dp(132);
+            hero.getLayoutParams().height = Math.max(dp(160), available);
+            hero.requestLayout();
+        });
 
         View first = null, restore = null;
         App initial = visible.get(0);
@@ -537,12 +615,12 @@ public class MainActivity extends Activity {
             tile.setGravity(Gravity.CENTER); tile.setPadding(dp(10), dp(10), dp(10), dp(10));
             tile.setTag(app.key); tile.setContentDescription(app.name); focusStyle(tile);
             ImageView icon = new ImageView(this); icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            icon.setImageDrawable(app.icon != null ? app.icon : getDrawable(R.drawable.icon));
+            icon.setImageDrawable(artwork(app.icon != null ? app.icon : getDrawable(R.drawable.icon)));
             tile.addView(icon, new LinearLayout.LayoutParams(-1, -1));
             tile.setOnFocusChangeListener((view, focused) -> {
-                view.setBackground(shape(focused ? Color.rgb(58,65,82) : PANEL, focused));
+                view.setBackground(shape(focused ? Color.rgb(53,65,56) : PANEL, focused));
                 view.animate().cancel();
-                view.animate().scaleX(focused ? 1.18f : 1f).scaleY(focused ? 1.18f : 1f)
+                view.animate().scaleX(focused ? 1.08f : 1f).scaleY(focused ? 1.08f : 1f)
                     .setDuration(220)
                     .setInterpolator(new DecelerateInterpolator()).start();
                 if (focused) {
@@ -571,7 +649,7 @@ public class MainActivity extends Activity {
             tile.setOnClickListener(v -> launch(app.component));
             tile.setOnLongClickListener(v -> { appMenu(app); return true; });
             slot.addView(tile, new FrameLayout.LayoutParams(dp(88), dp(88), Gravity.CENTER));
-            row.addView(slot, new LinearLayout.LayoutParams(dp(118), dp(132)));
+            row.addView(slot, new LinearLayout.LayoutParams(dp(120), dp(116)));
             if (first == null) first = tile;
             if (app.key.equals(previewKey)) initial = app;
             if (app.key.equals(wanted)) { restore = tile; initial = app; }
@@ -593,13 +671,9 @@ public class MainActivity extends Activity {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setClipChildren(false); panel.setClipToPadding(false);
         panel.setPadding(dp(24), dp(20), dp(24), dp(16));
-        panel.setBackground(shape(Color.argb(205, 15, 22, 35), false));
-        TextView brand = text("quiet tv", 24, Color.WHITE);
-        brand.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        panel.addView(brand);
-        TextView subtitle = text("Ваше пространство", 13, MUTED);
-        subtitle.setPadding(0, dp(6), 0, dp(20)); panel.addView(subtitle);
+        panel.setBackground(shape(Color.argb(220, 23, 29, 25), false));
         Button search = drawerButton("Поиск", "drawer-search", () -> {
             dialog.dismiss(); showSearch();
         });
@@ -621,13 +695,12 @@ public class MainActivity extends Activity {
         Button all = button("", "drawer-all", () -> {
             dialog.dismiss(); favoritesOnly = false; lastFocus = ""; renderApps();
         });
-        all.setContentDescription("Все приложения");
+        all.setContentDescription("Все приложения"); all.setPadding(0,0,0,0); all.setGravity(Gravity.CENTER);
         all.setCompoundDrawablesWithIntrinsicBounds(R.drawable.nav_apps, 0, 0, 0);
         LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(dp(46), dp(42));
         al.bottomMargin = dp(14); panel.addView(all, al);
-        TextView help = text("Назад или → — закрыть", 12, MUTED);
-        panel.addView(help);
         dialog.setContentView(panel);
+        watchFocus(panel);
         dialog.setOnDismissListener(d -> {
             drawer = null; lastFocus = previousKey;
             if (!isFinishing() && !isDestroyed()) {
@@ -636,6 +709,7 @@ public class MainActivity extends Activity {
             }
         });
         dialog.setOnKeyListener((d, key, event) -> {
+            recordNavigation(event);
             if (key == KeyEvent.KEYCODE_DPAD_RIGHT || key == KeyEvent.KEYCODE_MENU) {
                 if (event.getAction() == KeyEvent.ACTION_UP) dialog.dismiss();
                 return true;
@@ -668,9 +742,9 @@ public class MainActivity extends Activity {
         b.setPadding(dp(18), 0, dp(12), 0);
         b.setBackground(shape(Color.TRANSPARENT, false));
         b.setOnFocusChangeListener((view, focused) -> {
-            view.setBackground(shape(focused ? Color.argb(100, 190, 210, 240) : Color.TRANSPARENT, focused));
+            view.setBackground(shape(focused ? Color.argb(90, 110, 190, 140) : Color.TRANSPARENT, focused));
             view.animate().cancel();
-            view.animate().translationX(focused ? dp(6) : 0).setDuration(180).start();
+            view.animate().translationX(0).scaleX(1f).scaleY(1f).setDuration(180).start();
         });
         return b;
     }
@@ -696,7 +770,7 @@ public class MainActivity extends Activity {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(24), dp(22), dp(24), dp(20));
-        panel.setBackground(shape(Color.rgb(20, 23, 34), false));
+        panel.setBackground(shape(Color.rgb(27, 33, 29), false));
         LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL);
         heading.addView(text("Поиск приложений", 24, Color.WHITE), new LinearLayout.LayoutParams(0, -2, 1));
         Button close = button("Закрыть", "search-close", dialog::dismiss);
@@ -763,6 +837,7 @@ public class MainActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        recordNavigation(event);
         if (event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
             if (event.getAction() == KeyEvent.ACTION_UP) showDrawer();
             return true;
@@ -832,6 +907,9 @@ public class MainActivity extends Activity {
         if (c == null) chooseVpn(); else launch(c);
     }
     private void launch(ComponentName c) {
+        cancelPreview();
+        if (carouselAnimation != null) carouselAnimation.cancel();
+        if (colorAnimation != null) colorAnimation.cancel();
         Intent i = new Intent(Intent.ACTION_MAIN).setComponent(c)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
         open(i);
@@ -846,7 +924,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Quiet TV").setItems(new String[]{
             "Настройки телевизора", "Приложения и память", "Выбрать VPN-приложение",
             "Сделать главным экраном", "Выбор другого главного экрана",
-            "Обновить список приложений", "О приложении и приватности"
+            "Обновить список приложений", "О приложении и приватности", "Звуки интерфейса"
         }, (d,n) -> {
             switch(n) {
                 case 0: open(new Intent(Settings.ACTION_SETTINGS)); break;
@@ -857,8 +935,58 @@ public class MainActivity extends Activity {
                 case 4: open(new Intent(Settings.ACTION_HOME_SETTINGS)); break;
                 case 5: reloadApps(); break;
                 case 6: about(); break;
+                case 7: soundSettings(); break;
             }
         }).setNegativeButton("Закрыть",null).show();
+    }
+    private void soundSettings() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(28), dp(24), dp(28), dp(24));
+        panel.setBackground(shape(Color.rgb(27,33,29), false));
+        panel.addView(text("Звуки интерфейса", 24, Color.WHITE));
+        Switch enabled = new Switch(this); enabled.setText("Звуки навигации");
+        enabled.setTextColor(Color.WHITE); enabled.setPadding(0,dp(16),0,dp(16));
+        enabled.setChecked(prefs.getBoolean("sound-enabled", true)); enabled.setSoundEffectsEnabled(false);
+        enabled.setOnCheckedChangeListener((v, checked) -> prefs.edit().putBoolean("sound-enabled", checked).apply());
+        panel.addView(enabled, new LinearLayout.LayoutParams(-1,dp(60)));
+        TextView level = text("Громкость эффектов: " + prefs.getInt("sound-volume",20) + "%", 16, MUTED);
+        panel.addView(level);
+        SeekBar volume = new SeekBar(this); volume.setMax(100); volume.setProgress(prefs.getInt("sound-volume",20));
+        volume.setContentDescription("Громкость звуков интерфейса"); volume.setSoundEffectsEnabled(false);
+        volume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
+                if (fromUser) { prefs.edit().putInt("sound-volume",value).apply(); level.setText("Громкость эффектов: " + value + "%"); }
+            }
+            public void onStartTrackingTouch(SeekBar bar) { }
+            public void onStopTrackingTouch(SeekBar bar) { navigationSound.play(); }
+        });
+        panel.addView(volume,new LinearLayout.LayoutParams(-1,dp(48)));
+        String[] tones = {"Мягкий", "Капля", "Тёплый"};
+        LinearLayout toneRow = new LinearLayout(this);
+        for (int i=0;i<tones.length;i++) {
+            final int tone = i;
+            Button choice = button(tones[i], "sound-tone", () -> {
+                prefs.edit().putInt("sound-tone",tone).apply(); navigationSound.play();
+                toast("Звук: " + tones[tone]);
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,dp(44),1); lp.setMargins(dp(4),dp(12),dp(4),dp(12));
+            toneRow.addView(choice,lp);
+        }
+        panel.addView(toneRow);
+        panel.addView(text("Только эффекты Quiet TV. Громкость приложений не меняется.",12,MUTED));
+        Button test = button("Прослушать", "sound-test", () -> navigationSound.play());
+        Button close = button("Готово", "sound-close", dialog::dismiss);
+        LinearLayout controls = new LinearLayout(this);
+        controls.addView(test,new LinearLayout.LayoutParams(0,dp(44),1));
+        controls.addView(close,new LinearLayout.LayoutParams(0,dp(44),1));
+        panel.addView(controls);
+        dialog.setContentView(panel); watchFocus(panel);
+        dialog.setOnKeyListener((d,k,e) -> { recordNavigation(e); return false; });
+        dialog.show(); dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dialog.getWindow().setLayout(Math.min(dp(560),getResources().getDisplayMetrics().widthPixels-dp(64)),-2);
+        enabled.requestFocus();
     }
     private void requestHome() {
         if (Build.VERSION.SDK_INT >= 29) {
@@ -879,12 +1007,12 @@ public class MainActivity extends Activity {
     private String storageText() {
         try {
             StatFs fs = new StatFs(getFilesDir().getAbsolutePath());
-            return String.format(new Locale("ru"), "Свободно %.1f ГБ из %.1f ГБ · Quiet TV 0.5.1-dev",
+            return String.format(new Locale("ru"), "Свободно %.1f ГБ из %.1f ГБ · Quiet TV 0.6.0-dev",
                 fs.getAvailableBytes()/1073741824.0, fs.getTotalBytes()/1073741824.0);
-        } catch (RuntimeException e) { return "Quiet TV 0.5.1-dev"; }
+        } catch (RuntimeException e) { return "Quiet TV 0.6.0-dev"; }
     }
     private void about() {
-        new AlertDialog.Builder(this).setTitle("Quiet TV 0.5.1-dev — новый главный экран")
+        new AlertDialog.Builder(this).setTitle("Quiet TV 0.6.0-dev — новый главный экран")
             .setMessage("Оболочка не имеет разрешения на интернет, не содержит рекламы и аналитики. Избранное и назначение VPN сохраняются только на ТВ.\n\nКнопка VPN открывает установленный клиент: подключение выполняется в нём.\n\nОболочка не удаляет телеметрию Android или других приложений, не очищает оперативную память и не меняет прошивку." + "\n\n" + storageText())
             .setPositiveButton("Понятно", null).show();
     }

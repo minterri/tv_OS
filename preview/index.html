@@ -15,18 +15,45 @@
 .modal-veil{position:absolute;inset:0;z-index:5;background:#0008;display:grid;place-items:center}.modal{width:600px;max-height:450px;overflow:auto;background:#101a2af5;border:1px solid #445a7394;border-radius:20px;padding:24px}.modal h2{font-size:24px;font-weight:400;margin:0 0 18px}.modal p{color:#acb9ce;line-height:1.7}.modal button{background:#384b6660;border-radius:24px;padding:10px 20px;margin:6px 6px 0 0}.modal input{width:100%;padding:12px;border:1px solid #5a7394;background:#080c15;border-radius:12px;color:#fff;margin-bottom:12px}.results{display:grid;gap:8px}.results button{text-align:left;border-radius:12px}.result-row{display:flex;align-items:center;gap:12px}.result-row .app-icon{width:32px;height:32px;font-size:15px}.result-row span:nth-child(2){flex:1}.result-row small{color:#acb9ce}.help{padding:0 24px 24px;max-width:1490px;margin:auto;display:flex;justify-content:space-between;gap:20px;font-size:13px;line-height:1.6}.toast{position:absolute;left:50%;bottom:38px;transform:translateX(-50%);background:#edf3ff;color:#080c15;padding:12px 20px;border-radius:24px;z-index:8;font-size:13px;max-width:80%;text-align:center}.icon{width:22px;height:22px;display:inline-block;vertical-align:middle}.small-note{font-size:12px;color:#acb9ce}
 @media(max-width:650px){.toolbar{padding:12px}.viewport{padding:12px}.help{flex-direction:column;padding:0 12px 16px;gap:8px}.toolbar small{display:block}.screen-frame{border-radius:5px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Quiet TV 0.6: fixed navigation, unscaled vector artwork and a quiet green palette. */
+:root{background:#121212;color:#edf3ee;accent-color:#77cc96}
+.screen{background:radial-gradient(ellipse at 84% 35%,#1e2c23,#121212 78%)}
+.scenery{opacity:.08;background:radial-gradient(ellipse at 80% 25%,#77cc96,transparent 45%)}
+.scenery::after{display:none}
+.shell{display:flex;flex-direction:column}.header{flex:none}.section{height:36px;flex:none}
+.content{flex:1;min-height:0;height:auto;overflow:hidden;display:flex;flex-direction:column}
+.rail{flex:none;height:132px;min-height:132px;padding:8px 18px;contain:paint}
+.slot{width:120px;height:116px}.tile{background:#282b28aa}.tile.is-selected{transform:scale(1.08);background:#354138;box-shadow:inset 0 0 0 2px #77cc96}
+.app-icon{aspect-ratio:1;width:100%;height:100%;background:#ffffff08;color:#edf3ee;font-size:22px;letter-spacing:0}
+.app-icon img{width:74%;height:74%;object-fit:contain;filter:brightness(0) invert(1);display:block}
+.hero{min-height:0;flex:1}.hero h1{font-size:36px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-art{width:288px;height:100%;min-height:0}.hero-art .app-icon{width:112px;height:112px;font-size:30px;border-radius:16px;box-shadow:none}
+.hero-art .app-icon img{width:80px;height:80px}.actions .primary{background:#77cc96;color:#121212}.actions button{background:#28302aaa}
+.subtitle,.clock,.footer,.drawer small,.small-note{color:#a8b0aa}.footer{position:static;flex:none;margin-top:8px;font-size:11px}
+.drawer{background:#171d19dc;overflow:visible}.drawer button{flex-shrink:0;max-width:100%;transform:none!important}
+.drawer button:hover,.drawer button:focus-visible{background:#6ebe8c5a;transform:none;outline-color:#77cc96}
+.drawer button:focus-visible{outline-offset:0}.drawer .music{color:#77cc96}
+.grid{flex:1;min-height:0;overflow:auto}.catalogue-tile{background:#282b28aa}
+.modal{background:#1b211df5;border-color:#526b59}.modal p{color:#a8b0aa}.modal input{border-color:#526b59;background:#121212}
+.modal button{background:#28302aaa}.modal button[aria-pressed=true]{box-shadow:inset 0 0 0 2px #77cc96}
+.modal input[type=checkbox]{width:auto;margin:0 12px 0 0}.sound-check{display:flex;align-items:center;padding:12px 0 20px}.modal input[type=range]{padding:0;margin:16px 0;accent-color:#77cc96}
+.modal input[type=checkbox]{accent-color:#77cc96}.sound-tones{display:flex;gap:6px}.sound-tones button{flex:1}.toolbar button{background:#28372c}
+.toast{background:#b5ddc2;color:#121212}
+
 </style>
 </head>
 <body>
-<header class="toolbar"><div><strong>Quiet TV <small>0.5.1-dev · интерактивное превью</small></strong></div><span><button id="reset">Сбросить демо</button><button id="fullscreen">На весь экран</button></span></header>
+<header class="toolbar"><div><strong>Quiet TV <small>0.6.0-dev · интерактивное превью</small></strong></div><span><button id="reset">Сбросить демо</button><button id="fullscreen">На весь экран</button></span></header>
 <main class="viewport"><div class="screen-frame"><section class="screen" aria-label="Демонстрационный главный экран Quiet TV" style="--ambient:#263747"><div class="scenery"></div><div class="shell">
 <header class="header"><button class="menu" aria-label="Открыть навигацию">☰</button><div class="brand">Медиа</div><button id="vpn">VPN</button><button id="settings" aria-label="Настройки">⚙</button><time class="clock">20:45</time></header>
-<div class="section"><div class="section-name">Главная</div><small class="section-hint">Ваши приложения. Ничего лишнего.</small></div>
+<div class="section"><div class="section-name">Главная</div></div>
 <div class="content"><div class="rail"><div class="rail-row"></div></div><div class="hero"><div class="description"><div class="eyebrow">QUIET TV / ВАШЕ ПРОСТРАНСТВО</div><h1></h1><div class="subtitle"></div><div class="actions"><button class="primary" id="launch">Открыть</button><button class="remove" id="remove" aria-label="Убрать выбранное приложение с главной">⊖</button></div></div><div class="hero-art" aria-hidden="true"></div></div><div class="grid" hidden></div><div class="empty" hidden>Главная пока пуста.<br>Откройте каталог ▦ в боковой панели и закрепите приложения.</div></div>
 <div class="footer">Удерживайте OK на приложении, чтобы закрепить его на главной</div></div>
-<div class="veil" hidden><nav class="drawer" aria-label="Навигация"><h2>quiet tv</h2><small>Ваше пространство</small><button data-nav="search">⌕　Поиск</button><button data-nav="home">⌂　Главная</button><button class="music" data-nav="music">♫　Spotify</button><div class="bottom"><button class="all" data-nav="all" aria-label="Все приложения"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg></button><div class="hint">Назад или → — закрыть</div></div></nav></div>
+<div class="veil" hidden><nav class="drawer" aria-label="Навигация"><button data-nav="search">⌕　Поиск</button><button data-nav="home">⌂　Главная</button><button class="music" data-nav="music">♫　Spotify</button><div class="bottom"><button class="all" data-nav="all" aria-label="Все приложения"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg></button></div></nav></div>
 <div class="modal-veil" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></section></div><div class="toast" hidden role="status"></div></section></div></main>
 <footer class="help"><span>← → выбор · ↓ действия · Enter открыть · Esc назад · M меню<br>Мышь: наведение — выбор, правый клик — действия приложения.</span><span>Демонстрационные приложения. Это браузерная модель интерфейса.<br>Запуск Android-приложений и работа пульта здесь не эмулируются.</span></footer>
+<script src="sounds.js"></script>
 <script>
 (() => {
 'use strict';
@@ -47,7 +74,7 @@ let home=apps.slice(0,8).map(a=>a.id), selected=home[0], mode='home', priorFocus
 try{const saved=JSON.parse(localStorage.getItem('quiet-tv-preview-home'));if(Array.isArray(saved))home=saved.filter(id=>apps.some(a=>a.id===id));}catch(_){}
 selected=home[0]||apps[0].id;
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const icon=a=>{const el=document.createElement('span');el.className='app-icon';el.style.setProperty('--icon',a.color);el.textContent=a.mark;el.setAttribute('aria-hidden','true');return el;};
+const icon=a=>{const el=document.createElement('span');el.className='app-icon';el.style.setProperty('--icon',a.color);const icons={youtube:'youtube',spotify:'spotify',netflix:'netflix',kinopoisk:'kinopoisk',vlc:'vlcmediaplayer',kodi:'kodi'};if(icons[a.id]){const image=document.createElement('img');image.src='icons/'+icons[a.id]+'.svg';image.alt='';el.append(image);}else el.textContent=a.mark;el.setAttribute('aria-hidden','true');return el;};
 function save(){try{localStorage.setItem('quiet-tv-preview-home',JSON.stringify(home));}catch(_){}}
 function toast(message){clearTimeout(toastTimer);$('.toast').textContent=message;$('.toast').hidden=false;toastTimer=setTimeout(()=>$('.toast').hidden=true,2600);}
 function visible(){return mode==='home'?home.map(id=>apps.find(a=>a.id===id)):apps;}
@@ -55,12 +82,12 @@ function select(id,focus=false){
  const app=apps.find(a=>a.id===id);if(!app)return;const changed=selected!==id;selected=id;
  $$('.tile').forEach(b=>{const active=b.dataset.id===id;b.classList.toggle('is-selected',active);b.setAttribute('aria-pressed',String(active));b.tabIndex=active?0:-1;});
  $('.hero h1').textContent=app.name;$('.subtitle').textContent='Медиа и развлечения / '+app.name;
- $('.hero-art').replaceChildren(icon(app));$('.screen').style.setProperty('--ambient',app.ambient);$('.screen').style.setProperty('--glow',app.color);
- if(changed){$('.hero').classList.remove('changing');void $('.hero').offsetWidth;$('.hero').classList.add('changing');}
+ $('.hero-art').replaceChildren(icon(app));$('.screen').style.setProperty('--ambient','#1e2c23');$('.screen').style.setProperty('--glow','#77cc96');
+ if(changed){window.QuietAudio.play();$('.hero').classList.remove('changing');void $('.hero').offsetWidth;$('.hero').classList.add('changing');}
  const tile=$$('.tile').find(b=>b.dataset.id===id);if(tile){if(focus)tile.focus({preventScroll:true});$('.rail').scrollTo({left:Math.max(0,tile.parentElement.offsetLeft-$('.rail-row').offsetLeft),behavior:reduced?'instant':'smooth'});}
 }
 function render(){
- const list=visible(), isHome=mode==='home';$('.section-name').textContent=isHome?'Главная':'Все приложения';$('.section-hint').textContent=isHome?'Ваши приложения. Ничего лишнего.':'Правый клик на приложении — закрепить на главной';
+ const list=visible(), isHome=mode==='home';$('.section-name').textContent=isHome?'Главная':'Все приложения';
  $('.rail').hidden=!isHome||!list.length;$('.hero').hidden=!isHome||!list.length;$('.grid').hidden=isHome;$('.empty').hidden=!isHome||!!list.length;$('.rail-row').replaceChildren();$('.grid').replaceChildren();
  list.forEach(app=>{
   const b=document.createElement('button');b.dataset.id=app.id;b.setAttribute('aria-label',app.name);b.append(icon(app));
@@ -68,7 +95,7 @@ function render(){
   if(isHome){b.className='tile';b.addEventListener('focus',()=>select(app.id));b.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse')select(app.id);});b.addEventListener('click',()=>{select(app.id);launch();});const slot=document.createElement('div');slot.className='slot';slot.append(b);$('.rail-row').append(slot);}
   else{b.className='catalogue-tile';const label=document.createElement('span');label.textContent=app.name;b.append(label);b.addEventListener('click',()=>appActions(app));$('.grid').append(b);}
  });
- if(list.length){if(!list.some(a=>a.id===selected))selected=list[0].id;select(selected);}else $('.screen').style.setProperty('--ambient','#263747');
+ if(list.length){if(!list.some(a=>a.id===selected))selected=list[0].id;select(selected);}else $('.screen').style.setProperty('--ambient','#1e2c23');
  $('.content').scrollTop=0;
 }
 function focusTile(){const tile=$$('.tile').find(b=>b.dataset.id===selected);if(tile)tile.focus({preventScroll:true});else $('.menu').focus();}
@@ -83,11 +110,12 @@ function appActions(app){const box=modal(app.name);modalButton(box,home.includes
 function search(){const box=modal('Поиск приложений'),input=document.createElement('input');input.placeholder='Название приложения';input.setAttribute('aria-label','Название приложения');const results=document.createElement('div');results.className='results';box.append(input,results);function update(){results.replaceChildren();const query=input.value.toLocaleLowerCase('ru').replaceAll('ё','е');apps.filter(a=>a.name.toLocaleLowerCase('ru').replaceAll('ё','е').includes(query)).forEach(a=>{const b=document.createElement('button');b.className='result-row';b.append(icon(a));const text=document.createElement('span');text.textContent=a.name;b.append(text);const state=document.createElement('small');state.textContent=home.includes(a.id)?'На главной':'В каталоге';b.append(state);b.onclick=()=>{closeModal();appActions(a);};results.append(b);});if(!results.children.length)results.textContent='Ничего не найдено';}input.oninput=update;update();modalButton(box,'Закрыть',closeModal);input.focus();}
 $('.menu').onclick=()=>drawer(true);$('.veil').onclick=e=>{if(e.target===$('.veil'))drawer(false);};
 $$('[data-nav]').forEach(b=>b.onclick=()=>{const nav=b.dataset.nav;drawer(false);if(nav==='home'||nav==='all'){mode=nav==='home'?'home':'all';render();if(mode==='home')focusTile();else $('.catalogue-tile')?.focus();}else if(nav==='search')search();else explain('Spotify','На телевизоре эта кнопка открывает установленный Spotify.');});
-$('#launch').onclick=launch;$('#remove').onclick=()=>remove();$('#vpn').onclick=()=>explain('VPN','В Quiet TV здесь открывается выбранный VPN-клиент. Превью не управляет сетевыми подключениями.');$('#settings').onclick=()=>explain('Настройки','Диалоги и кнопки Quiet TV оформлены в общей теме. Системные настройки Android и кнопки прошивки остаются штатными.');
+$('#launch').onclick=launch;$('#remove').onclick=()=>remove();$('#vpn').onclick=()=>explain('VPN','В Quiet TV здесь открывается выбранный VPN-клиент. Превью не управляет сетевыми подключениями.');$('#settings').onclick=()=>{const box=modal('Звуки интерфейса');window.QuietAudio.settings(box,closeModal);};
 $('#reset').onclick=()=>{home=apps.slice(0,8).map(a=>a.id);selected=home[0];mode='home';save();$('.modal-veil').hidden=true;$('.veil').hidden=true;render();toast('Демонстрационный список восстановлен');};
 $('#fullscreen').onclick=()=>{if(!document.fullscreenElement)$('.screen-frame').requestFullscreen?.().catch(()=>toast('Полноэкранный режим недоступен'));else document.exitFullscreen?.();};
 function resize(){const scale=$('.screen-frame').clientWidth/960;$('.screen').style.transform='scale('+scale+')';}new ResizeObserver(resize).observe($('.screen-frame'));resize();
 function clock(){const now=new Date();$('.clock').textContent=now.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,30000);
+document.addEventListener('focusin',event=>{if(!event.target.classList.contains('tile')&&event.target.closest('.screen'))window.QuietAudio.play();});
 document.addEventListener('keydown',event=>{
  const key=event.key, modalOpen=!$('.modal-veil').hidden, drawerOpen=!$('.veil').hidden;
  if(modalOpen){if(key==='Escape'){event.preventDefault();closeModal();}else if(key==='Tab'){const items=[...$('.modal').querySelectorAll('button,input')];const index=items.indexOf(document.activeElement);if(items.length){event.preventDefault();items[(index+(event.shiftKey?-1:1)+items.length)%items.length].focus();}}return;}

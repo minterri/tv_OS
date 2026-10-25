@@ -1,0 +1,4 @@
+Vector icons: Simple Icons, https://github.com/simple-icons/simple-icons
+License: CC0-1.0, https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
+Downloaded 2026-10-26: youtube, spotify, netflix, kinopoisk, vlcmediaplayer, kodi.
+These are demonstration assets for the browser preview. Android uses icons from installed apps.
